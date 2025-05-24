@@ -1,0 +1,26 @@
+model:
+  name: ResNet50
+
+dataset:
+  name: DTD
+  output_dim: 47
+  path_root: data/dtd
+  init_args:
+    split: train
+
+data:
+  batch_size_train: 64
+  batch_size_test: 64
+  num_workers: 4
+  val_split: 0.2
+
+training:
+  num_epochs: 15
+  save_name: saved_models/resnet_dtd.pt
+
+pretrained:
+  pre_t: true
+  load: ""
+
+logger:
+  wandb: false

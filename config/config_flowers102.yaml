@@ -1,0 +1,26 @@
+model:
+  name: ResNet50
+
+dataset:
+  name: Flowers102
+  output_dim: 102
+  path_root: data/flowers
+  init_args:
+    split: train
+
+data:
+  batch_size_train: 64
+  batch_size_test: 64
+  num_workers: 4
+  val_split: 0.2
+
+training:
+  num_epochs: 15
+  save_name: saved_models/resnet_flowers102.pt
+
+pretrained:
+  pre_t: true
+  load: ""
+
+logger:
+  wandb: false

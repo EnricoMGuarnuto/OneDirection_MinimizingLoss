@@ -1,0 +1,26 @@
+model:
+  name: ResNet50
+
+dataset:
+  name: CIFAR10
+  output_dim: 10
+  path_root: data/cifar10
+  init_args:
+    train: true
+
+data:
+  batch_size_train: 64
+  batch_size_test: 64
+  num_workers: 4
+  val_split: 0.2
+
+training:
+  num_epochs: 15
+  save_name: saved_models/resnet_cifar10.pt
+
+pretrained:
+  pre_t: true
+  load: ""
+
+logger:
+  wandb: false

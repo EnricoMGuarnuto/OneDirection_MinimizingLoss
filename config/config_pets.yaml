@@ -1,0 +1,27 @@
+model:
+  name: ResNet50
+
+dataset:
+  name: OxfordIIITPet
+  output_dim: 37
+  path_root: data/pets
+  init_args:
+    split: trainval
+    target_types: category
+
+data:
+  batch_size_train: 64
+  batch_size_test: 64
+  num_workers: 4
+  val_split: 0.2
+
+training:
+  num_epochs: 15
+  save_name: saved_models/resnet_pets.pt
+
+pretrained:
+  pre_t: true
+  load: ""
+
+logger:
+  wandb: false
