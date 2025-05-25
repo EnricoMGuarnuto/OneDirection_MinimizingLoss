@@ -1,8 +1,7 @@
+import torch
 import torch.nn as nn
 import torchvision.models as models
 from torchvision.models import ResNet50_Weights
-import torch
-
 
 def get_model(cfg, mode="classification"):
     model_name = cfg["model"]["name"]
@@ -11,27 +10,31 @@ def get_model(cfg, mode="classification"):
     checkpoint_path = cfg["pretrained"].get("load", "")
 
     if model_name == "ResNet50":
-        # Usa pesi ImageNet se pre_t è True
         weights = ResNet50_Weights.DEFAULT if use_pretrained else None
-        model = models.resnet50(weights=weights)
+        base_model = models.resnet50(weights=weights)
 
         if mode == "classification":
-            in_features = model.fc.in_features
-            model.fc = nn.Linear(in_features, output_dim)
+            # Usa la testa per classificazione
+            in_features = base_model.fc.in_features
+            base_model.fc = nn.Linear(in_features, output_dim)
 
         elif mode == "retrieval":
-            modules = list(model.children())[:-1]  # tutto tranne fc
-            model = nn.Sequential(*modules, nn.Flatten())
+            # Rimuove la testa (fc), usa solo backbone fino al flatten
+            modules = list(base_model.children())[:-1]
+            base_model = nn.Sequential(*modules, nn.Flatten())
+
+        else:
+            raise ValueError(f"Mode {mode} non riconosciuto.")
 
         # Carica checkpoint se specificato
         if checkpoint_path:
             try:
                 state_dict = torch.load(checkpoint_path, map_location="cpu")
-                model.load_state_dict(state_dict)
-                print(f"✅ Checkpoint caricato da: {checkpoint_path}")
+                base_model.load_state_dict(state_dict, strict=False)
+                print(f"✅ Checkpoint caricato da: {checkpoint_path} (strict=False)")
             except FileNotFoundError:
-                print(f"⚠️ Checkpoint non trovato: {checkpoint_path}. Uso solo pesi ImageNet.")
+                print(f"⚠️ Checkpoint non trovato: {checkpoint_path}. Uso solo pesi di default.")
 
-        return model
+        return base_model
 
     raise NotImplementedError(f"Model {model_name} non supportato per mode {mode}.")

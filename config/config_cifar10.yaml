@@ -5,14 +5,15 @@ dataset:
   name: CIFAR10
   output_dim: 10
   path_root: data/cifar10
-  init_args:
+  train_init_args:
     train: true
+  val_init_args:
+    train: false
 
 data:
   batch_size_train: 64
   batch_size_test: 64
   num_workers: 4
-  val_split: 0.2
 
 training:
   num_epochs: 15
@@ -21,6 +22,8 @@ training:
 pretrained:
   pre_t: true
   load: ""
+
+finetune: true
 
 logger:
   wandb: false
