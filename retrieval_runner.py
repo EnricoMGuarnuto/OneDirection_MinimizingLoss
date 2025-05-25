@@ -42,7 +42,9 @@ if __name__ == "__main__":
         **dataset_args
     )
 
-    dataset = CustomRetrievalDataset(base_dataset)
+    from retrieval import DatasetWithPaths
+    dataset = DatasetWithPaths(base_dataset)
+
 
     loader = DataLoader(dataset, batch_size=cfg["data"]["batch_size_test"], shuffle=False,
                         num_workers=cfg["data"]["num_workers"], collate_fn=custom_collate)

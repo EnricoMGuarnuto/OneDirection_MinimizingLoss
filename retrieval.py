@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
@@ -154,3 +155,35 @@ def compute_metrics(results, dataset):
         sum(ap_list) / len(ap_list),
         sum(precision_at_1_list) / len(precision_at_1_list)
     )
+
+class DatasetWithPaths(torch.utils.data.Dataset):
+    def __init__(self, base_dataset):
+        self.base_dataset = base_dataset
+
+        if hasattr(base_dataset, '_image_files'):
+            self.image_paths = [os.path.join(base_dataset.root, f) for f in base_dataset._image_files]
+        elif hasattr(base_dataset, 'data') and isinstance(base_dataset.data, list):
+            self.image_paths = base_dataset.data
+        else:
+            raise AttributeError("Il dataset non ha un attributo noto per recuperare i path delle immagini.")
+
+    def __len__(self):
+        return len(self.base_dataset)
+
+    def __getitem__(self, idx):
+        img, label = self.base_dataset[idx]
+        return img, label, self.image_paths[idx]
+
+    @property
+    def labels(self):
+        if hasattr(self.base_dataset, 'targets'):
+            return self.base_dataset.targets
+        elif hasattr(self.base_dataset, 'labels'):
+            return self.base_dataset.labels
+        elif hasattr(self.base_dataset, '_labels'):
+            return self.base_dataset._labels
+        else:
+            raise AttributeError("Il dataset non ha un attributo noto per accedere alle etichette.")
+
+
+
