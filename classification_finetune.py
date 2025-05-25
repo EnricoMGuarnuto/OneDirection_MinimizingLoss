@@ -4,66 +4,68 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from dataloader import create_dataloader
-from train import train_step, test_step
+from train import test_step
 import os
-
 
 def save_model(model, path):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     torch.save(model.state_dict(), path)
 
+def accuracy_fn(y_true, y_pred):
+    return (y_true == y_pred).sum().item() / len(y_true)
+
+def train_step(model, data_loader, loss_fn, optimizer, accuracy_fn, device):
+    train_loss, train_acc = 0, 0
+    model.train()
+    model.to(device)
+
+    for i, batch in enumerate(data_loader):
+        
+        if isinstance(batch, (list, tuple)) and len(batch) == 2:
+            X, y = batch
+        else:
+            raise ValueError(f"Batch ha formato inatteso: {type(batch)}, contenuto: {batch}")
+
+        X, y = X.to(device), y.to(device)
+        y_pred = model(X)
+        loss = loss_fn(y_pred, y)
+        train_loss += loss.item()
+        train_acc += accuracy_fn(y_true=y, y_pred=y_pred.argmax(dim=1))
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+    train_loss /= len(data_loader)
+    train_acc /= len(data_loader)
+    return train_loss, train_acc
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, required=True, help='Path al file di configurazione YAML')
     args = parser.parse_args()
 
-    # Carica configurazione
     with open(args.config, 'r') as f:
         cfg = yaml.safe_load(f)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # Carica train loader
-    train_loader, val_loader = None, None
-
+    print("\n📦 Caricamento dei dataloader")
     if "val_init_args" in cfg["dataset"]:
-        # Se specificato, usa val loader separato
-        train_loader, _, _, _ = create_dataloader(
-            root_dir=cfg["dataset"]["path_root"],
-            batch_size=cfg["data"]["batch_size_train"],
-            val_split=0,
-            mode='train',
-            dataset_name=cfg["dataset"]["name"],
-            init_args=cfg["dataset"].get("train_init_args", cfg["dataset"].get("init_args", {}))
-        )
+        train_loader = create_dataloader(cfg, mode='train')
+        if isinstance(train_loader, torch.utils.data.DataLoader):
+            pass
+        elif isinstance(train_loader, (list, tuple)) and isinstance(train_loader[0], torch.utils.data.DataLoader):
+            train_loader = train_loader[0]
 
-        val_loader, _, _, _ = create_dataloader(
-            root_dir=cfg["dataset"]["path_root"],
-            batch_size=cfg["data"]["batch_size_test"],
-            val_split=0,
-            mode='test',
-            dataset_name=cfg["dataset"]["name"],
-            init_args=cfg["dataset"].get("val_init_args", cfg["dataset"].get("init_args", {}))
-        )
+        val_loader = create_dataloader(cfg, mode='val')
         print("✅ Uso val_loader separato definito da val_init_args")
-
     else:
-        # Se no, fai split interno
-        train_loader, val_loader, _, _ = create_dataloader(
-            root_dir=cfg["dataset"]["path_root"],
-            batch_size=cfg["data"]["batch_size_train"],
-            val_split=cfg["data"].get("val_split", 0.2),
-            mode='train',
-            dataset_name=cfg["dataset"]["name"],
-            init_args=cfg["dataset"].get("init_args", {})
-        )
+        train_loader, val_loader = create_dataloader(cfg, mode='train')
         print("⚠️  Nessun val_loader specificato: faccio split interno dal train")
 
-    # Carica modello
     from models import get_model
-    model = get_model(cfg, mode="classification")
-    model = model.to(device)
+    model = get_model(cfg, mode="classification").to(device)
 
     print("\n🔍 Verifica dei layer:")
     for name, param in model.named_parameters():
@@ -72,7 +74,6 @@ def main():
         else:
             print(f"❌ Layer bloccato: {name}")
 
-    # Fase 1: ottimizza solo la testa
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=cfg["training"].get("head_lr", 1e-4))
     num_epochs = cfg["training"].get("num_epochs_head", 5)
@@ -81,6 +82,7 @@ def main():
     print("\n🚀 Fase 1: Fine-tune solo testa")
     best_acc = 0.0
     for epoch in range(num_epochs):
+        print(f"⏳ Inizio epoca {epoch+1}/{num_epochs}")
         train_loss, train_acc = train_step(model, train_loader, criterion, optimizer, accuracy_fn, device)
         val_loss, val_acc = test_step(model, val_loader, criterion, accuracy_fn, device)
         print(f"[Head Epoch {epoch+1}/{num_epochs}] Train loss: {train_loss:.4f}, acc: {train_acc:.4f} | Val loss: {val_loss:.4f}, acc: {val_acc:.4f}")
@@ -89,7 +91,6 @@ def main():
             save_model(model, save_path)
             print(f"✅ Miglior modello salvato (head): {save_path}")
 
-    # Fase 2: sblocca tutto e ottimizza
     print("\n🔓 Sblocco di tutti i layer per full fine-tuning")
     for param in model.parameters():
         param.requires_grad = True
@@ -100,6 +101,7 @@ def main():
 
     print("\n🚀 Fase 2: Full fine-tuning")
     for epoch in range(num_epochs):
+        print(f"⏳ Inizio epoca {epoch+1}/{num_epochs}")
         train_loss, train_acc = train_step(model, train_loader, criterion, optimizer, accuracy_fn, device)
         val_loss, val_acc = test_step(model, val_loader, criterion, accuracy_fn, device)
         print(f"[Full Epoch {epoch+1}/{num_epochs}] Train loss: {train_loss:.4f}, acc: {train_acc:.4f} | Val loss: {val_loss:.4f}, acc: {val_acc:.4f}")
@@ -109,9 +111,6 @@ def main():
             print(f"✅ Miglior modello salvato (full): {save_path}")
 
     print("\n🏁 Fine training")
-
-def accuracy_fn(y_true, y_pred):
-    return (y_true == y_pred).sum().item() / len(y_true)
 
 if __name__ == "__main__":
     main()
