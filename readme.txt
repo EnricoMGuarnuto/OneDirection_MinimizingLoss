@@ -26,12 +26,52 @@ results\_resnet50v1.json
 
 ## COMPUTE METRICS:
 
-python compute\_metrics.py --mapping\_json /Users/enricomariaguarnuto/Desktop/peppe/OneDirection\_MinimizingLoss/data/new\_animals/data\_split\_mapping.json --results\_json /Users/enricomariaguarnuto/Desktop/peppe/OneDirection\_MinimizingLoss/results\_resnet50v1.json --k 10
-
+python compute_metrics.py \--mapping_json data/new_animals/data_split_mapping.json \--results_json results_resnet101_finetuned.json \--k 10
 ## NOTES:
 
 * Always update gallery\_dir and query\_dir inside the YAML configs to absolute paths.
 * To test other models, prepare or modify the YAML files in the config/ folder.
-* If you want, we can make a script to batch-run all configs automatically.
 
-Let me know if you want that!
+
+
+
+Chiara:
+-- RESNET(50,101,152) --> tutto ok 
+
+metriche:
+
+-Resnet50
+Finetuned: 75.93
+Non finetuned: 67.53
+
+-Resnet101
+Finetuned: 77.78
+Non finetuned: 70.74
+
+-Resnet152
+Finetuned: 82.59
+Non finetuned: 72.22
+
+RMK: yaml unico per finetune e non finetune. quando si fa retrieval, ricordarsi di modificare:
+- il nome del file json del risultato (infondo),
+- le due checkpoint paths: no paths per solo retrieval, sì path per retrieval modello finetuned
+
+
+-- CLIP --> non finetuned ok, accuracy = 99.26
+impo: installare clip!!!!   -->   pip install git+https://github.com/openai/CLIP.git
+
+yaml divisi:
+clip.yaml --> solo retrieval
+clip_finetune.yaml --> per finetuning
+clip_retrieval_finetune.yaml --> per rerieval con modello finetunato
+
+py retrieval diversi:
+retrieval_clip.py --> per solo retrieval
+retrieval_clip_finetune.py --> per retrieval del modello finetuned 
+
+!!! CLIP FINETUNED: no ok. ho sbrugnato in ogni modo possibile, prima mi veniva accuracy uguale tra i due
+(come se non stesse finetunando), mentre con questa combinazione di codici viene accuracy di 3.3.
+
+chat però dice:
+CLIP è già ottimizzato per feature extraction, ed è pre-addestrato su milioni di immagini con un obiettivo contrastivo. 
+Fine-tunarlo con cross-entropy può peggiorare le feature per retrieval se non lo fai con attenzione (es. freezing parziale, gradual unfreezing).

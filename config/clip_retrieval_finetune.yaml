@@ -1,0 +1,10 @@
+model:
+  checkpoint_path: saved_models/clip_finetuned.pt
+
+data:
+  gallery_dir: data/new_animals/test/gallery
+  query_dir: data/new_animals/test/query
+
+retrieval:
+  top_k: 10
+  output_json: results_clip_finetuned.json
