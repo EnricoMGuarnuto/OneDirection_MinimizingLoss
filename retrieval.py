@@ -1,189 +1,114 @@
 import os
+import argparse
+import yaml
 import torch
-import torch.nn.functional as F
+import numpy as np
+from torchvision import models
+from PIL import Image
 from tqdm import tqdm
-from collections import Counter
+import json
+import timm  # use timm for flexible model loading
 
-class CustomRetrievalDataset(torch.utils.data.Dataset):
-    def __init__(self, base_dataset):
-        self.base_dataset = base_dataset
-        self.labels = []
-        self.filenames = []  # gli indici numerici (usati internamente)
-        self.real_filenames = []  # i veri nomi file (per il JSON)
+def load_model(cfg, device):
+    name = cfg['model']['name']
+    pretrained = cfg['model'].get('pretrained', True)
+    checkpoint_path = cfg['model'].get('checkpoint_path', '')
 
-        for idx in range(len(self.base_dataset)):
-            img_data = self.base_dataset[idx]
-            if isinstance(img_data, tuple) and len(img_data) == 2:
-                _, label = img_data
-            else:
-                label = None  # fallback
+    # Load any model from timm or torchvision
+    try:
+        model = timm.create_model(name, pretrained=pretrained, num_classes=0)
+        print(f"✅ Loaded {name} from timm")
+    except Exception:
+        try:
+            model_fn = getattr(models, name)
+            model = model_fn(pretrained=pretrained)
+            if hasattr(model, 'fc'):
+                model.fc = torch.nn.Identity()
+            elif hasattr(model, 'classifier'):
+                model.classifier = torch.nn.Identity()
+            print(f"✅ Loaded {name} from torchvision")
+        except Exception:
+            raise ValueError(f"Model {name} not found in timm or torchvision")
 
-            self.labels.append(label)
-            self.filenames.append(str(idx))
+    if checkpoint_path:
+        model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+        print(f"✅ Loaded custom weights from {checkpoint_path}")
 
-            # Cerca di estrarre il vero nome file se disponibile
-            if hasattr(base_dataset, 'images'):  # torchvision ImageFolder, DTD, ecc.
-                full_path = base_dataset.images[idx][0]
-                filename = full_path.split("/")[-1]
-            else:
-                filename = f"img_{idx}.jpg"  # fallback generico
-
-            self.real_filenames.append(filename)
-
-    def __len__(self):
-        return len(self.base_dataset)
-
-    def __getitem__(self, idx):
-        img, _ = self.base_dataset[idx]
-        return img, self.filenames[idx]
-
-    def get_label(self, filename):
-        return self.labels[int(filename)]
-
-    def get_real_filename(self, filename):
-        return self.real_filenames[int(filename)]
-
-def custom_collate(batch):
-    images = torch.stack([x[0] for x in batch])
-    names = [x[1] for x in batch]
-    return images, names
-
-def compute_optimal_k(dataset):
-    class_counts = Counter(dataset.labels)
-    max_per_class = max(class_counts.values()) - 1  # togli la query
-    return max_per_class
-
-def extract_features(model, data_loader, device):
-    model.eval()
     model.to(device)
-    features, filenames = [], []
+    model.eval()
+    return model
 
+def get_image_paths(folder):
+    all_files = []
+    for root, _, files in os.walk(folder):
+        for file in files:
+            if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                rel_path = os.path.relpath(os.path.join(root, file), folder)
+                all_files.append(rel_path)
+    return sorted(all_files)
+
+def extract_embeddings(model, image_paths, root_folder, device, img_size, norm_mean, norm_std):
+    from torchvision import transforms
+
+    transform = transforms.Compose([
+        transforms.Resize((img_size, img_size)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=norm_mean, std=norm_std)
+    ])
+
+    embeddings = {}
     with torch.no_grad():
-        for imgs, names in tqdm(data_loader, desc="Extracting features"):
-            imgs = imgs.to(device)
-            feats = model(imgs)
-            features.append(feats.cpu())
-            filenames.extend(names)
+        for rel_path in tqdm(image_paths, desc=f"Extracting features from {root_folder}"):
+            img_path = os.path.join(root_folder, rel_path)
+            img = Image.open(img_path).convert('RGB')
+            img_tensor = transform(img).unsqueeze(0).to(device)
+            feature = model(img_tensor).squeeze().cpu().numpy()
+            embeddings[rel_path] = feature / np.linalg.norm(feature)
+    return embeddings
 
-    return torch.cat(features), filenames
-
-def compute_topk(features, filenames, k=5):
-    n = features.size(0)
-    k = min(k, n - 1)
-    similarity = F.cosine_similarity(features.unsqueeze(1), features.unsqueeze(0), dim=2)
+def compute_topk(query_embeddings, gallery_embeddings, k):
+    gallery_files = list(gallery_embeddings.keys())
+    gallery_feats = np.stack(list(gallery_embeddings.values()))
     results = []
-    for i in range(n):
-        topk = similarity[i].topk(k + 1).indices[1:]
-        results.append({
-            "filename": filenames[i],
-            "samples": [filenames[j] for j in topk]
-        })
+    for query_file, query_feat in tqdm(query_embeddings.items(), desc="Computing retrieval"):
+        sims = np.dot(gallery_feats, query_feat)
+        topk_idx = np.argsort(sims)[-k:][::-1]
+        topk_files = [gallery_files[i] for i in topk_idx]
+        results.append({"filename": query_file, "samples": topk_files})
     return results
 
-def save_json(results, metrics, dataset, path):
-    import json, os
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+def save_json(results, output_path):
+    with open(output_path, 'w') as f:
+        json.dump(results, f, indent=2)
+    print(f"✅ Saved retrieval results to {output_path}")
 
-    # Prova a capire da dove prendere i path
-    if hasattr(dataset.base_dataset, 'samples'):
-        get_path = lambda idx: dataset.base_dataset.samples[int(idx)][0]
-    elif hasattr(dataset.base_dataset, 'imgs'):
-        get_path = lambda idx: dataset.base_dataset.imgs[int(idx)][0]
-    elif hasattr(dataset.base_dataset, 'image_paths'):
-        get_path = lambda idx: dataset.base_dataset.image_paths[int(idx)]
-    else:
-        raise AttributeError("Il dataset non ha un attributo noto per recuperare i path delle immagini.")
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, required=True, help='Path to config YAML file')
+    args = parser.parse_args()
 
-    json_data = {
-        "metrics": {
-            "topk_accuracy": metrics[0],
-            "precision@k": metrics[1],
-            "recall@k": metrics[2],
-            "mAP": metrics[3],
-            "precision@1": metrics[4]
-        },
-        "results": [
-            {
-                "query": get_path(entry["filename"]),
-                "retrieved": [get_path(fid) for fid in entry["samples"]]
-            }
-            for entry in results
-        ]
-    }
+    with open(args.config, 'r') as f:
+        cfg = yaml.safe_load(f)
 
-    with open(path, "w") as f:
-        json.dump(json_data, f, indent=2)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = load_model(cfg, device)
 
+    gallery_dir = cfg['data']['gallery_dir']
+    query_dir = cfg['data']['query_dir']
+    img_size = cfg['data'].get('img_size', 224)
+    norm_mean = cfg['data'].get('normalization', {}).get('mean', [0.485, 0.456, 0.406])
+    norm_std = cfg['data'].get('normalization', {}).get('std', [0.229, 0.224, 0.225])
+    top_k = cfg['retrieval'].get('top_k', 10)
+    output_json = cfg['retrieval'].get('output_json', 'retrieval_results.json')
 
+    gallery_paths = get_image_paths(gallery_dir)
+    query_paths = get_image_paths(query_dir)
 
-from collections import Counter
+    gallery_embeddings = extract_embeddings(model, gallery_paths, gallery_dir, device, img_size, norm_mean, norm_std)
+    query_embeddings = extract_embeddings(model, query_paths, query_dir, device, img_size, norm_mean, norm_std)
 
-def compute_metrics(results, dataset):
-    precision_list, recall_list, ap_list, precision_at_1_list = [], [], [], []
-    correct_total = 0
-    class_counts = Counter(dataset.labels)
+    retrieval_results = compute_topk(query_embeddings, gallery_embeddings, top_k)
+    save_json(retrieval_results, output_json)
 
-    for entry in results:
-        query_label = dataset.get_label(entry["filename"])
-        retrieved_labels = [dataset.get_label(f) for f in entry["samples"]]
-        relevant = [1 if label == query_label else 0 for label in retrieved_labels]
-
-        correct = sum(relevant)
-        precision = correct / len(relevant)
-        recall = correct / class_counts[query_label]
-        precisions = []
-        correct_so_far = 0
-        for i, rel in enumerate(relevant):
-            if rel:
-                correct_so_far += 1
-                precisions.append(correct_so_far / (i + 1))
-        ap = sum(precisions) / correct if correct > 0 else 0
-        precision_at_1 = relevant[0] if relevant else 0
-
-        precision_list.append(precision)
-        recall_list.append(recall)
-        ap_list.append(ap)
-        precision_at_1_list.append(precision_at_1)
-
-        if query_label in retrieved_labels:
-            correct_total += 1
-
-    return (
-        correct_total / len(results),
-        sum(precision_list) / len(precision_list),
-        sum(recall_list) / len(recall_list),
-        sum(ap_list) / len(ap_list),
-        sum(precision_at_1_list) / len(precision_at_1_list)
-    )
-
-class DatasetWithPaths(torch.utils.data.Dataset):
-    def __init__(self, base_dataset):
-        self.base_dataset = base_dataset
-
-        if hasattr(base_dataset, '_image_files'):
-            self.image_paths = [os.path.join(base_dataset.root, f) for f in base_dataset._image_files]
-        elif hasattr(base_dataset, 'data') and isinstance(base_dataset.data, list):
-            self.image_paths = base_dataset.data
-        else:
-            raise AttributeError("Il dataset non ha un attributo noto per recuperare i path delle immagini.")
-
-    def __len__(self):
-        return len(self.base_dataset)
-
-    def __getitem__(self, idx):
-        img, label = self.base_dataset[idx]
-        return img, label, self.image_paths[idx]
-
-    @property
-    def labels(self):
-        if hasattr(self.base_dataset, 'targets'):
-            return self.base_dataset.targets
-        elif hasattr(self.base_dataset, 'labels'):
-            return self.base_dataset.labels
-        elif hasattr(self.base_dataset, '_labels'):
-            return self.base_dataset._labels
-        else:
-            raise AttributeError("Il dataset non ha un attributo noto per accedere alle etichette.")
-
-
-
+if __name__ == '__main__':
+    main()

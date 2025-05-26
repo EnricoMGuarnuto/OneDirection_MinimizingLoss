@@ -1,0 +1,19 @@
+model:
+  name: resnet101
+  source: torchvision
+  pretrained: true
+  checkpoint_path: ""
+  output_dim: 2048
+
+data:
+  gallery_dir: /Users/enricomariaguarnuto/Desktop/peppe/OneDirection_MinimizingLoss/data/new_animals/test/gallery
+  query_dir: /Users/enricomariaguarnuto/Desktop/peppe/OneDirection_MinimizingLoss/data/new_animals/test/query
+
+  img_size: 224
+  normalization:
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+
+retrieval:
+  top_k: 10
+  output_json: results_resnet101_v1.json
