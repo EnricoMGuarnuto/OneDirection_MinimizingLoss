@@ -1,65 +1,37 @@
-Image Retrieval Project
-=======================
+# README - Retrieval Pipeline Commands
 
-Questo progetto fornisce un framework modulare per Image Retrieval basato su PyTorch. Supporta modelli preaddestrati come ResNet50 e modelli fine-tuned su dataset specifici, con salvataggio dei risultati e valutazione automatica.
+## SETUP:
 
-Cartelle e File
----------------
-- config/                → Configurazioni in YAML per ogni dataset
-- data/                  → Cartella con i dataset scaricati
-- models.py              → Costruzione dei modelli (es. ResNet50)
-- train_model.py         → Training completo e salvataggio dei pesi
-- train.py               → Funzioni per singolo step di training/validazione
-- retrieval.py           → Script principale per Retrieval e valutazione
-- saved_models/          → Contiene i modelli fine-tuned salvati
-- retrieval_results/     → Risultati in formato JSON (metriche + immagini)
+Install dependencies:
 
-Comandi da Terminale
----------------------
+pip install timm git+[https://github.com/openai/CLIP.git](https://github.com/openai/CLIP.git) pyyaml tqdm
 
-Retrieval con modello preaddestrato su ImageNet:
-    python retrieval.py --config config/config_pets.yaml --model_type imagenet
+If using conda:
 
-Retrieval con modello fine-tuned:
-    python retrieval.py --config config/config_pets.yaml --model_type finetuned
+conda install pytorch torchvision torchaudio -c pytorch
+pip install timm git+[https://github.com/openai/CLIP.git](https://github.com/openai/CLIP.git) pyyaml tqdm
 
-Retrieval su un sottoinsieme (es. 100 immagini):
-    python retrieval.py --config config/config_pets.yaml --model_type imagenet --limit 100
+## PREPARE DATASET:
 
-Training di un modello:
-    python main.py --config config/config_pets.yaml
+python prepare\_dataset.py --data\_root /Users/enricomariaguarnuto/Desktop/peppe/OneDirection\_MinimizingLoss/data/big\_animals/animals/animals --output\_root /Users/enricomariaguarnuto/Desktop/peppe/OneDirection\_MinimizingLoss/data/new\_animals --train\_split 0.7 --gallery\_split 0.15 --query\_split 0.15 --copy\_mode copy
 
-Output
-------
-Ogni esecuzione di retrieval salva un file in:
-    retrieval_results/resnet50_nomeDataset_modelType.json
+## RUN RETRIEVAL:
 
-Il file JSON contiene:
-- Top-k accuracy
-- Precision@k, Recall@k
-- Mean Average Precision (mAP)
-- Precision@1
-- Lista delle immagini più simili trovate per ciascuna query
+Example for ResNet50:
 
-Dataset Supportati
-------------------
-Qualsiasi dataset di torchvision può essere usato, specificando nel file YAML:
-    dataset:
-      name: NomeClasseTorchvision
-      output_dim: numero_classi
-      path_root: path/ai/dati
-      init_args:
-        parametri_specifici: valore
+python retrieval.py --config config/resnet50\_v1.yaml
 
-Requisiti
----------
-- Python >= 3.9
-- torch >= 2.0
-- torchvision
-- matplotlib
-- tqdm
-- pyyaml
+This will produce something like:
+results\_resnet50v1.json
 
-Installazione rapida:
-    pip install -r requirements.txt
+## COMPUTE METRICS:
 
+python compute\_metrics.py --mapping\_json /Users/enricomariaguarnuto/Desktop/peppe/OneDirection\_MinimizingLoss/data/new\_animals/data\_split\_mapping.json --results\_json /Users/enricomariaguarnuto/Desktop/peppe/OneDirection\_MinimizingLoss/results\_resnet50v1.json --k 10
+
+## NOTES:
+
+* Always update gallery\_dir and query\_dir inside the YAML configs to absolute paths.
+* To test other models, prepare or modify the YAML files in the config/ folder.
+* If you want, we can make a script to batch-run all configs automatically.
+
+Let me know if you want that!
