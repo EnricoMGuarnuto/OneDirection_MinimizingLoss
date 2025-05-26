@@ -9,7 +9,8 @@ def load_mapping(mapping_file):
     label_dict = {}
     for split in ['gallery', 'query']:
         for item in mapping[split]:
-            label_dict[item['file'].replace('test/gallery/', '').replace('test/query/', '')] = item['class']
+            filename = "/".join(item['file'].split("/")[-2:])
+            label_dict[filename] = item['class']
     return label_dict
 
 def load_retrieval_results(results_file):
