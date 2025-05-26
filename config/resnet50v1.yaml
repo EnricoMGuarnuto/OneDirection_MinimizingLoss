@@ -4,7 +4,7 @@ model:
   name: resnet50
   source: torchvision
   pretrained: true
-  checkpoint_path: saved_models/resnet50v1_finetuned.pt
+  checkpoint_path: ""
   output_dim: 2048
 
 data:
@@ -27,4 +27,4 @@ training:
 
 retrieval:
   top_k: 10
-  output_json: results_resnet50_finetuned.json
+  output_json: results_resnet50.json
