@@ -1,10 +1,12 @@
 # YAML for fine-tuning + retrieval ResNet101
 
+# YAML for fine-tuning + retrieval ResNet101
+
 model:
   name: resnet101
   source: torchvision
   pretrained: true
-  checkpoint_path: saved_models/resnet101v1_finetuned.pt
+  checkpoint_path: ""  
   output_dim: 2048
 
 data:
@@ -23,8 +25,9 @@ training:
   freeze_backbone: false
   lr_backbone: 1e-5
   lr_head: 1e-3
-  save_checkpoint: saved_models/resnet101_finetuned.pt
+  save_checkpoint: ""
 
 retrieval:
   top_k: 10
-  output_json: results_resnet101_finetuned.json
+  output_json: results_resnet101.json
+

@@ -4,8 +4,7 @@ model:
   name: resnet152
   source: torchvision
   pretrained: true
-  checkpoint_path: saved_models/resnet152v1_finetuned.pt
-  output_dim: 2048
+  checkpoint_path: ""  
 
 data:
   train_dir: data/new_animals/train
@@ -23,8 +22,8 @@ training:
   freeze_backbone: false
   lr_backbone: 1e-5
   lr_head: 1e-3
-  save_checkpoint: saved_models/resnet152_finetuned.pt
+  save_checkpoint: ""  
 
 retrieval:
   top_k: 10
-  output_json: results_resnet152_finetuned.json
+  output_json: results_resnet152.json
