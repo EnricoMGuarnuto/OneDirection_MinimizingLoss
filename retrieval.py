@@ -8,35 +8,44 @@ from PIL import Image
 from tqdm import tqdm
 import json
 import timm  # use timm for flexible model loading
+import torch.nn as nn
+
 
 def load_model(cfg, device):
     name = cfg['model']['name']
+    source = cfg['model'].get('source', 'torchvision')
     pretrained = cfg['model'].get('pretrained', True)
     checkpoint_path = cfg['model'].get('checkpoint_path', '')
 
-    # Load any model from timm or torchvision
-    try:
-        model = timm.create_model(name, pretrained=pretrained, num_classes=0)
+    # Determine number of classes from training if needed, else default
+    num_classes = cfg['model'].get('num_classes', 1000)  # fallback to 1000 if not provided
+
+    if source == 'timm':
+        model = timm.create_model(name, pretrained=pretrained, num_classes=num_classes)
+        if checkpoint_path:
+            state_dict = torch.load(checkpoint_path, map_location=device)
+            filtered_state_dict = {k: v for k, v in state_dict.items() if not k.startswith('fc.') and not k.startswith('classifier.')}
+            model.load_state_dict(filtered_state_dict, strict=False)
+            print(f"✅ Loaded custom backbone weights from {checkpoint_path}")
+        model.reset_classifier(0, '')  # Remove classifier head
         print(f"✅ Loaded {name} from timm")
-    except Exception:
-        try:
-            model_fn = getattr(models, name)
-            model = model_fn(pretrained=pretrained)
-            if hasattr(model, 'fc'):
-                model.fc = torch.nn.Identity()
-            elif hasattr(model, 'classifier'):
-                model.classifier = torch.nn.Identity()
-            print(f"✅ Loaded {name} from torchvision")
-        except Exception:
-            raise ValueError(f"Model {name} not found in timm or torchvision")
 
-    if checkpoint_path:
-        model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-        print(f"✅ Loaded custom weights from {checkpoint_path}")
+    else:
+        model_fn = getattr(models, name)
+        model = model_fn(pretrained=pretrained)
+        if checkpoint_path:
+            state_dict = torch.load(checkpoint_path, map_location=device)
+            filtered_state_dict = {k: v for k, v in state_dict.items() if not k.startswith('fc.') and not k.startswith('classifier.')}
+            model.load_state_dict(filtered_state_dict, strict=False)
+            print(f"✅ Loaded custom backbone weights from {checkpoint_path}")
+        if hasattr(model, 'fc'):
+            model.fc = nn.Identity()
+        elif hasattr(model, 'classifier'):
+            model.classifier = nn.Identity()
+        print(f"✅ Loaded {name} from torchvision")
 
-    model.to(device)
-    model.eval()
-    return model
+    return model.to(device)
+
 
 def get_image_paths(folder):
     all_files = []
