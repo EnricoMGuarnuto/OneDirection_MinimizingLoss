@@ -6,8 +6,9 @@ model:
   output_dim: 2048
 
 data:
-  gallery_dir: /Users/enricomariaguarnuto/Desktop/peppe/OneDirection_MinimizingLoss/data/new_animals/test/gallery
-  query_dir: /Users/enricomariaguarnuto/Desktop/peppe/OneDirection_MinimizingLoss/data/new_animals/test/query
+  train_dir: data/new_animals/train
+  gallery_dir: data/new_animals/test/gallery
+  query_dir: data/new_animals/test/query
 
   img_size: 224
   normalization:
