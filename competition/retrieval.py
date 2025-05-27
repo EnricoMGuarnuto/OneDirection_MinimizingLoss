@@ -82,14 +82,12 @@ def load_model(cfg, device):
 
     return model.to(device)
 
-
 def get_image_paths(folder):
     all_files = []
     for root, _, files in os.walk(folder):
         for file in files:
             if file.lower().endswith(('.png', '.jpg', '.jpeg')):
-                rel_path = os.path.relpath(os.path.join(root, file), folder)
-                all_files.append(rel_path)
+                all_files.append(file)
     return sorted(all_files)
 
 def extract_embeddings(model, image_paths, root_folder, device, img_size, norm_mean, norm_std, source, name):
