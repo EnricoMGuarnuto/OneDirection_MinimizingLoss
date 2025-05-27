@@ -1,8 +1,8 @@
 model:
   name: moco_resnet50
-  source: custom
+  source: moco
   pretrained: false
-  checkpoint_path: saved_models/moco_resnet50_finetuned_triplet_better.pt
+  checkpoint_path: "saved_models/moco_v2_800ep_pretrain.pth.tar"  #saved_models/moco_resnet50_finetuned_triplet_better.pt
   output_dim: 2048
 
 data:
@@ -17,16 +17,16 @@ data:
   val_split: 0.2
 
 training:
-  num_epochs: 10  # o quanto stai usando
+  num_epochs: 10  
   freeze_backbone: false
   lr_backbone: 8.685203427469252e-06
   lr_head: 0  # inutile, ma puoi lasciarlo a 0
   optimizer: sgd
   margin: 0.4004761143351423
-  save_checkpoint: saved_models/moco_resnet50_finetuned_triplet_better.pt
+  save_checkpoint: saved_models/moco_resnet50_cross_finetuned.pt
 
 
 retrieval:
   top_k: 10
-  output_json: results_moco_resnet50_finetuned_tripl_bett.json
+  output_json: results_moco_resnet50_cross_finetuned.json
 

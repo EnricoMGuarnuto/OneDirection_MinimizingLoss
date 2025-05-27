@@ -2,7 +2,7 @@ model:
   name: RN50
   source: open_clip
   pretrained: true
-  checkpoint_path: 
+  checkpoint_path: ""
   output_dim: 1024  # embedding dimension for CLIP RN50
 
 data:
@@ -25,4 +25,4 @@ training:
 
 retrieval:
   top_k: 10
-  output_json: results_clip_rn50.json
+  output_json: results_clip_rn50_finetuned.json
