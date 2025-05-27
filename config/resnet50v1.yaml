@@ -4,7 +4,7 @@ model:
   name: resnet50
   source: torchvision
   pretrained: true
-  checkpoint_path: saved_models/resnet50_triplet.pt
+  checkpoint_path: 
   output_dim: 2048
 
 data:

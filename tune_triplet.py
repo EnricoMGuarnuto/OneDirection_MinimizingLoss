@@ -30,10 +30,10 @@ def objective(trial):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    lr = trial.suggest_float('lr', 1e-6, 1e-2, log=True)
+    # Hyperparameters to optimize
+    lr = trial.suggest_float('lr', 1e-6, 1e-3, log=True)
     optimizer_name = trial.suggest_categorical('optimizer', ['adam', 'sgd'])
-    margin = trial.suggest_float('margin', 0.2, 1.0)
-    freeze_backbone = trial.suggest_categorical('freeze_backbone', [False, True])
+    margin = trial.suggest_float('margin', 0.1, 1.0)
 
     transform = transforms.Compose([
         transforms.Resize((cfg['data']['img_size'], cfg['data']['img_size'])),
@@ -46,42 +46,10 @@ def objective(trial):
 
     model = load_model(cfg, device)
 
-    has_head = any(name.startswith('fc') or name.startswith('classifier') for name, _ in model.named_parameters())
-
-    if freeze_backbone and not has_head:
-        print("⚠ Modello senza testa, forzo freeze_backbone=False")
-        freeze_backbone = False
-
-    params_to_optimize = []
-    if not freeze_backbone:
-        params_to_optimize += [p for p in model.parameters() if p.requires_grad]
-
-    if not params_to_optimize:
-        raise ValueError("⚠ Nessun parametro da ottimizzare! Controlla freeze_backbone o aggiungi un head.")
-
     if optimizer_name == 'adam':
-        optimizer = optim.Adam(params_to_optimize, lr=lr)
+        optimizer = optim.Adam(model.parameters(), lr=lr)
     else:
-        optimizer = optim.SGD(params_to_optimize, lr=lr, momentum=0.9)
-
-    loss_fn = nn.TripletMarginLoss(margin=margin, p=2)
-
-    epoch_loss = train_one_epoch(model, dataloader, optimizer, loss_fn, device)
-    return epoch_loss
-
-
-
-    params_to_optimize = []
-    if not freeze_backbone:
-        params_to_optimize += [p for p in model.parameters() if p.requires_grad]
-
-    if not params_to_optimize:
-        raise ValueError("⚠ Nessun parametro da ottimizzare! Controlla freeze_backbone o aggiungi un head.")
-
-    if optimizer_name == 'adam':
-        optimizer = optim.Adam(params_to_optimize, lr=lr_head)
-    else:
-        optimizer = optim.SGD(params_to_optimize, lr=lr_head, momentum=0.9)
+        optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
 
     loss_fn = nn.TripletMarginLoss(margin=margin, p=2)
 

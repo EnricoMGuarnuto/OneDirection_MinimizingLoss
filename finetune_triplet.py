@@ -106,8 +106,19 @@ def main():
 
     model = load_model(cfg, device)
 
-    optimizer = optim.Adam(model.parameters(), lr=float(cfg['training']['lr_backbone']))
-    loss_fn = nn.TripletMarginLoss(margin=1.0, p=2)
+    optimizer_name = cfg['training'].get('optimizer', 'adam').lower()
+    lr = float(cfg['training']['lr_backbone'])  # uso solo uno, perché non abbiamo testa in triplet
+    margin = float(cfg['training'].get('margin', 1.0))
+
+    if optimizer_name == 'adam':
+        optimizer = optim.Adam(model.parameters(), lr=lr)
+    elif optimizer_name == 'sgd':
+        optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+    else:
+        raise ValueError(f"Optimizer {optimizer_name} not supported")
+
+    loss_fn = nn.TripletMarginLoss(margin=margin, p=2)
+
 
     os.makedirs(os.path.dirname(cfg['training']['save_checkpoint']), exist_ok=True)
 
