@@ -1,7 +1,7 @@
 model:
   name: moco_resnet50
   source: custom
-  pretrained: false
+  pretrained: true
   checkpoint_path: competition/saved_models/moco_v2_800ep_pretrain.pth.tar
   output_dim: 2048
 
@@ -14,7 +14,7 @@ data:
   normalization:
     mean: [0.485, 0.456, 0.406]
     std: [0.229, 0.224, 0.225]
-  val_split: 0.0
+  val_split: 0.1
 
 training:
   num_epochs: 10
@@ -22,8 +22,9 @@ training:
   lr_backbone: 1e-5
   lr_head: 1e-3
   optimizer: adam  # puoi mettere 'adam' o 'sgd' se lo script supporta la lettura
-  save_checkpoint: #competition/saved_models/moco_resnet50_finetuned_triplet.pt
+  margin: 0.2
+  save_checkpoint: #competition/saved_models/moco_resnet50_finetuned_triplet.pt  (triplet o cross)
 
 retrieval:
   top_k: 10
-  output_json: #competition/results_moco_resnet50_finetuned.json
+  output_json: #competition/results_moco_resnet50_finetuned_triplet.json  (triplet o cross)
