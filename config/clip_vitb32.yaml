@@ -2,7 +2,7 @@ model:
   name: ViT-B-32
   source: open_clip
   pretrained: true
-  checkpoint_path: saved_models/clip_vitb32_triplet.pt
+  checkpoint_path:  ""  # saved_models/clip_vitb32_triplet.pt
   output_dim: 512  # CLIP ViT-B/32 embedding size
 
 data:
@@ -21,8 +21,8 @@ training:
   freeze_backbone: false
   lr_backbone: 1e-5
   lr_head: 1e-3
-  save_checkpoint: saved_models/clip_vitb32_triplet.pt
+  save_checkpoint: saved_models/clip_vitb32_cross.pt
 
 retrieval:
   top_k: 10
-  output_json: results_clip_vitb32_trpl_finetuned.json
+  output_json: results_clip_vitb32_cross_finetuned.json
