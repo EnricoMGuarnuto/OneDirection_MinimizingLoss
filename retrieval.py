@@ -10,6 +10,7 @@ import json
 import timm  # use timm for flexible model loading
 import torch.nn as nn
 import open_clip
+import torchvision.models as tv_models
 
 
 
@@ -18,12 +19,26 @@ def load_model(cfg, device):
     source = cfg['model'].get('source', 'torchvision')
     pretrained = cfg['model'].get('pretrained', True)
     checkpoint_path = cfg['model'].get('checkpoint_path', '')
-
     num_classes = cfg['model'].get('num_classes', 1000)
 
-    if source == 'open_clip':
+    if name == 'moco_resnet50':
+        model = tv_models.resnet50(pretrained=False)
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        if 'state_dict' in checkpoint:
+            state_dict = checkpoint['state_dict']
+            new_state_dict = {k.replace('module.encoder_q.', ''): v for k, v in state_dict.items() if k.startswith('module.encoder_q')}
+            model.load_state_dict(new_state_dict, strict=False)
+            print(f"✅ Loaded MoCo v2 ResNet50 from {checkpoint_path}")
+        else:
+            # directly a state_dict (from fine-tuned weights)
+            model.load_state_dict(checkpoint, strict=False)
+            print(f"✅ Loaded fine-tuned weights from {checkpoint_path}")
+        model.fc = nn.Identity()
+
+
+    elif source == 'open_clip':
         model, _, _ = open_clip.create_model_and_transforms(name, pretrained='openai')
-        model = model.visual  # solo parte visiva per retrieval
+        model = model.visual  # only visual encoder
         if checkpoint_path:
             state_dict = torch.load(checkpoint_path, map_location=device)
             model.load_state_dict(state_dict, strict=False)
@@ -38,11 +53,11 @@ def load_model(cfg, device):
             filtered_state_dict = {k: v for k, v in state_dict.items() if not k.startswith('fc.') and not k.startswith('classifier.')}
             model.load_state_dict(filtered_state_dict, strict=False)
             print(f"✅ Loaded custom backbone weights from {checkpoint_path}")
-        model.reset_classifier(0, '')  # Remove classifier head
+        model.reset_classifier(0, '')  # remove classifier head
         print(f"✅ Loaded {name} from timm")
 
     else:
-        model_fn = getattr(models, name)
+        model_fn = getattr(tv_models, name)
         model = model_fn(pretrained=pretrained)
         if checkpoint_path:
             state_dict = torch.load(checkpoint_path, map_location=device)
