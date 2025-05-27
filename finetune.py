@@ -9,9 +9,20 @@ from torch.utils.data import random_split, DataLoader
 from tqdm import tqdm
 import timm
 import open_clip
-from sklearn.model_selection import train_test_split
-from torch.utils.data import Subset
+from sklearn.model_selection import StratifiedShuffleSplit
+import numpy as np
 
+
+## questo è finetune new in competition prima che lo aggiornassi
+class LinearHead(nn.Module):
+    def __init__(self, backbone, in_features, num_classes):
+        super().__init__()
+        self.backbone = backbone
+        self.head = nn.Linear(in_features, num_classes)
+
+    def forward(self, x):
+        x = self.backbone(x)
+        return self.head(x)
 
 
 def load_model(cfg, device, num_classes):
@@ -22,7 +33,9 @@ def load_model(cfg, device, num_classes):
 
     if source == 'open_clip':
         model, _, _ = open_clip.create_model_and_transforms(name, pretrained='openai')
-        model = model.visual  # solo parte visiva per fine-tuning
+        model = model.visual
+        in_features = model.output_dim
+        model = LinearHead(model, in_features, num_classes)
         if checkpoint_path:
             state_dict = torch.load(checkpoint_path, map_location=device)
             model.load_state_dict(state_dict, strict=False)
@@ -33,23 +46,37 @@ def load_model(cfg, device, num_classes):
     elif source == 'timm':
         model = timm.create_model(name, pretrained=pretrained, num_classes=num_classes)
         if checkpoint_path:
-            model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+            model.load_state_dict(torch.load(checkpoint_path, map_location=device), strict=False)
             print(f"✅ Loaded weights from {checkpoint_path}")
         else:
             print(f"✅ Loaded {name} with pretrained={pretrained}")
+        model.reset_classifier(num_classes)
 
-    else:
+    elif source == 'torchvision':
         model_fn = getattr(models, name)
         model = model_fn(pretrained=pretrained)
         in_features = model.fc.in_features
         model.fc = nn.Linear(in_features, num_classes)
         if checkpoint_path:
-            model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+            model.load_state_dict(torch.load(checkpoint_path, map_location=device), strict=False)
             print(f"✅ Loaded weights from {checkpoint_path}")
         else:
             print(f"✅ Loaded {name} with pretrained={pretrained}")
 
+    elif source == 'moco':
+        from torchvision.models.resnet import resnet50
+        model = resnet50()
+        if checkpoint_path:
+            ckpt = torch.load(checkpoint_path, map_location=device)
+            if 'state_dict' in ckpt:
+                ckpt = {k.replace('module.encoder_q.', ''): v for k, v in ckpt['state_dict'].items() if 'encoder_q' in k}
+                model.load_state_dict(ckpt, strict=False)
+            print(f"✅ Loaded MoCo weights from {checkpoint_path}")
+        in_features = model.fc.in_features
+        model.fc = nn.Linear(in_features, num_classes)
+
     return model.to(device)
+
 
 def train_one_epoch(model, loader, optimizer, loss_fn, device):
     model.train()
@@ -69,6 +96,7 @@ def train_one_epoch(model, loader, optimizer, loss_fn, device):
 
     return running_loss / total, correct / total
 
+
 def validate(model, loader, loss_fn, device):
     model.eval()
     running_loss, correct, total = 0.0, 0, 0
@@ -83,6 +111,7 @@ def validate(model, loader, loss_fn, device):
             total += labels.size(0)
 
     return running_loss / total, correct / total
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -101,21 +130,11 @@ def main():
     ])
 
     full_dataset = datasets.ImageFolder(cfg['data']['train_dir'], transform=transform)
-    # Estraiamo paths e labels
-    samples = full_dataset.samples  # lista di (path, class_idx)
-    paths, labels = zip(*samples)
-
-    # Creiamo indici stratificati
-    train_idx, val_idx = train_test_split(
-        range(len(paths)),
-        test_size=cfg['data'].get('val_split', 0.2),
-        stratify=labels,
-        random_state=42
-    )
-
-    # Costruiamo i sotto-dataset
-    train_ds = Subset(full_dataset, train_idx)
-    val_ds = Subset(full_dataset, val_idx)
+    targets = [s[1] for s in full_dataset.samples]
+    splitter = StratifiedShuffleSplit(n_splits=1, test_size=cfg['data'].get('val_split', 0.2), random_state=42)
+    train_idx, val_idx = next(splitter.split(np.zeros(len(targets)), targets))
+    train_ds = torch.utils.data.Subset(full_dataset, train_idx)
+    val_ds = torch.utils.data.Subset(full_dataset, val_idx)
 
     train_loader = DataLoader(train_ds, batch_size=cfg['data']['batch_size'], shuffle=True, num_workers=4)
     val_loader = DataLoader(val_ds, batch_size=cfg['data']['batch_size'], shuffle=False, num_workers=4)
@@ -125,24 +144,20 @@ def main():
 
     if cfg['training'].get('freeze_backbone', False):
         for name, param in model.named_parameters():
-            if 'fc' not in name and 'classifier' not in name:
+            if 'head' not in name and 'fc' not in name and 'classifier' not in name:
                 param.requires_grad = False
         print("✅ Backbone frozen")
 
     lr_head = float(cfg['training']['lr_head'])
     lr_backbone = float(cfg['training']['lr_backbone'])
 
-    params_to_optimize = []
-    head_params = [p for n, p in model.named_parameters() if ('fc' in n or 'classifier' in n) and p.requires_grad]
-    backbone_params = [p for n, p in model.named_parameters() if p.requires_grad and ('fc' not in n and 'classifier' not in n)]
-    
-    if head_params:
-        params_to_optimize.append({'params': head_params, 'lr': lr_head})
+    head_params = [p for n, p in model.named_parameters() if ('head' in n or 'fc' in n or 'classifier' in n) and p.requires_grad]
+    backbone_params = [p for n, p in model.named_parameters() if p.requires_grad and ('head' not in n and 'fc' not in n and 'classifier' not in n)]
 
-    if backbone_params:
-        params_to_optimize.append({'params': backbone_params, 'lr': lr_backbone})
-
-    optimizer = optim.Adam(params_to_optimize)
+    optimizer = optim.Adam([
+        {'params': head_params, 'lr': lr_head},
+        {'params': backbone_params, 'lr': lr_backbone}
+    ])
     loss_fn = nn.CrossEntropyLoss()
     best_val_acc = 0.0
 
@@ -160,6 +175,7 @@ def main():
             print(f"✅ Saved best model to {cfg['training']['save_checkpoint']}")
 
     print("🏁 Training completed.")
+
 
 if __name__ == '__main__':
     main()
