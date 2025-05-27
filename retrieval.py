@@ -23,6 +23,7 @@ def load_model(cfg, device):
 
     if name == 'moco_resnet50':
         model = tv_models.resnet50(pretrained=False)
+        model.fc = nn.Identity()  # ⚠ rimuoviamo subito la testa (output 1000) → embedding 2048
         checkpoint = torch.load(checkpoint_path, map_location=device)
         if 'state_dict' in checkpoint:
             state_dict = checkpoint['state_dict']
@@ -31,9 +32,9 @@ def load_model(cfg, device):
             print(f"✅ Loaded MoCo v2 ResNet50 from {checkpoint_path}")
         else:
             # directly a state_dict (from fine-tuned weights)
-            model.load_state_dict(checkpoint, strict=False)
+            filtered_state_dict = {k: v for k, v in checkpoint.items() if not k.startswith('fc.')}
+            model.load_state_dict(filtered_state_dict, strict=False)
             print(f"✅ Loaded fine-tuned weights from {checkpoint_path}")
-        model.fc = nn.Identity()
 
 
     elif source == 'open_clip':
