@@ -1,11 +1,9 @@
-# YAML example for fine-tuning + retrieval ResNet models
-
 model:
-  name: resnet50
-  source: torchvision
+  name: RN50
+  source: open_clip
   pretrained: true
-  checkpoint_path: saved_models/resnet50_finetuned.pt
-  output_dim: 2048
+  checkpoint_path: 
+  output_dim: 1024  # embedding dimension for CLIP RN50
 
 data:
   train_dir: data/new_animals/train
@@ -14,8 +12,8 @@ data:
   img_size: 224
   batch_size: 64
   normalization:
-    mean: [0.485, 0.456, 0.406]
-    std: [0.229, 0.224, 0.225]
+    mean: [0.48145466, 0.4578275, 0.40821073]
+    std: [0.26862954, 0.26130258, 0.27577711]
   val_split: 0.2
 
 training:
@@ -23,8 +21,8 @@ training:
   freeze_backbone: false
   lr_backbone: 1e-5
   lr_head: 1e-3
-  save_checkpoint: saved_models/resnet50_finetuned.pt
+  save_checkpoint: saved_models/clip_rn50_finetuned.pt
 
 retrieval:
   top_k: 10
-  output_json: results_resnet50_finetuned.json
+  output_json: results_clip_rn50.json

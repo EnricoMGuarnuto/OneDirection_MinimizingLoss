@@ -8,6 +8,8 @@ from torchvision import datasets, transforms, models
 from torch.utils.data import random_split, DataLoader
 from tqdm import tqdm
 import timm
+import open_clip
+
 
 def load_model(cfg, device, num_classes):
     name = cfg['model']['name']
@@ -15,19 +17,34 @@ def load_model(cfg, device, num_classes):
     pretrained = cfg['model'].get('pretrained', True)
     checkpoint_path = cfg['model'].get('checkpoint_path', '')
 
-    if source == 'timm':
+    if source == 'open_clip':
+        model, _, _ = open_clip.create_model_and_transforms(name, pretrained='openai')
+        model = model.visual  # solo parte visiva per fine-tuning
+        if checkpoint_path:
+            state_dict = torch.load(checkpoint_path, map_location=device)
+            model.load_state_dict(state_dict, strict=False)
+            print(f"✅ Loaded custom weights from {checkpoint_path}")
+        else:
+            print(f"✅ Loaded {name} with pretrained weights from open_clip")
+
+    elif source == 'timm':
         model = timm.create_model(name, pretrained=pretrained, num_classes=num_classes)
+        if checkpoint_path:
+            model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+            print(f"✅ Loaded weights from {checkpoint_path}")
+        else:
+            print(f"✅ Loaded {name} with pretrained={pretrained}")
+
     else:
         model_fn = getattr(models, name)
         model = model_fn(pretrained=pretrained)
         in_features = model.fc.in_features
         model.fc = nn.Linear(in_features, num_classes)
-
-    if checkpoint_path:
-        model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-        print(f"✅ Loaded weights from {checkpoint_path}")
-    else:
-        print(f"✅ Loaded {name} with pretrained={pretrained}")
+        if checkpoint_path:
+            model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+            print(f"✅ Loaded weights from {checkpoint_path}")
+        else:
+            print(f"✅ Loaded {name} with pretrained={pretrained}")
 
     return model.to(device)
 

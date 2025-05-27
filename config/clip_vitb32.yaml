@@ -1,0 +1,28 @@
+model:
+  name: ViT-B-32
+  source: open_clip
+  pretrained: true
+  checkpoint_path: saved_models/clip_vitb32_triplet.pt
+  output_dim: 512  # CLIP ViT-B/32 embedding size
+
+data:
+  train_dir: data/new_animals/train
+  gallery_dir: data/new_animals/test/gallery
+  query_dir: data/new_animals/test/query
+  img_size: 224
+  batch_size: 64
+  normalization:
+    mean: [0.48145466, 0.4578275, 0.40821073]
+    std: [0.26862954, 0.26130258, 0.27577711]
+  val_split: 0.2
+
+training:
+  num_epochs: 10
+  freeze_backbone: false
+  lr_backbone: 1e-5
+  lr_head: 1e-3
+  save_checkpoint: saved_models/clip_vitb32_triplet.pt
+
+retrieval:
+  top_k: 10
+  output_json: results_clip_vitb32_trpl_finetuned.json

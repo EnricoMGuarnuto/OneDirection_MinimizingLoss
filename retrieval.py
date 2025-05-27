@@ -9,6 +9,8 @@ from tqdm import tqdm
 import json
 import timm  # use timm for flexible model loading
 import torch.nn as nn
+import open_clip
+
 
 
 def load_model(cfg, device):
@@ -17,10 +19,19 @@ def load_model(cfg, device):
     pretrained = cfg['model'].get('pretrained', True)
     checkpoint_path = cfg['model'].get('checkpoint_path', '')
 
-    # Determine number of classes from training if needed, else default
-    num_classes = cfg['model'].get('num_classes', 1000)  # fallback to 1000 if not provided
+    num_classes = cfg['model'].get('num_classes', 1000)
 
-    if source == 'timm':
+    if source == 'open_clip':
+        model, _, _ = open_clip.create_model_and_transforms(name, pretrained='openai')
+        model = model.visual  # solo parte visiva per retrieval
+        if checkpoint_path:
+            state_dict = torch.load(checkpoint_path, map_location=device)
+            model.load_state_dict(state_dict, strict=False)
+            print(f"✅ Loaded custom weights from {checkpoint_path}")
+        else:
+            print(f"✅ Loaded {name} with pretrained weights from open_clip")
+
+    elif source == 'timm':
         model = timm.create_model(name, pretrained=pretrained, num_classes=num_classes)
         if checkpoint_path:
             state_dict = torch.load(checkpoint_path, map_location=device)
@@ -56,21 +67,24 @@ def get_image_paths(folder):
                 all_files.append(rel_path)
     return sorted(all_files)
 
-def extract_embeddings(model, image_paths, root_folder, device, img_size, norm_mean, norm_std):
-    from torchvision import transforms
-
-    transform = transforms.Compose([
-        transforms.Resize((img_size, img_size)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=norm_mean, std=norm_std)
-    ])
+def extract_embeddings(model, image_paths, root_folder, device, img_size, norm_mean, norm_std, source, name):
+    if source == 'open_clip':
+        import open_clip
+        _, _, preprocess = open_clip.create_model_and_transforms(name, pretrained='openai')
+    else:
+        from torchvision import transforms
+        preprocess = transforms.Compose([
+            transforms.Resize((img_size, img_size)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=norm_mean, std=norm_std)
+        ])
 
     embeddings = {}
     with torch.no_grad():
         for rel_path in tqdm(image_paths, desc=f"Extracting features from {root_folder}"):
             img_path = os.path.join(root_folder, rel_path)
             img = Image.open(img_path).convert('RGB')
-            img_tensor = transform(img).unsqueeze(0).to(device)
+            img_tensor = preprocess(img).unsqueeze(0).to(device)
             feature = model(img_tensor).squeeze().cpu().numpy()
             embeddings[rel_path] = feature / np.linalg.norm(feature)
     return embeddings
@@ -110,11 +124,14 @@ def main():
     top_k = cfg['retrieval'].get('top_k', 10)
     output_json = cfg['retrieval'].get('output_json', 'retrieval_results.json')
 
+    source = cfg['model'].get('source', 'torchvision')
+    name = cfg['model']['name']
+
     gallery_paths = get_image_paths(gallery_dir)
     query_paths = get_image_paths(query_dir)
 
-    gallery_embeddings = extract_embeddings(model, gallery_paths, gallery_dir, device, img_size, norm_mean, norm_std)
-    query_embeddings = extract_embeddings(model, query_paths, query_dir, device, img_size, norm_mean, norm_std)
+    gallery_embeddings = extract_embeddings(model, gallery_paths, gallery_dir, device, img_size, norm_mean, norm_std, source, name)
+    query_embeddings = extract_embeddings(model, query_paths, query_dir, device, img_size, norm_mean, norm_std, source, name)
 
     retrieval_results = compute_topk(query_embeddings, gallery_embeddings, top_k)
     save_json(retrieval_results, output_json)
