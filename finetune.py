@@ -13,7 +13,6 @@ from sklearn.model_selection import StratifiedShuffleSplit
 import numpy as np
 
 
-## questo è finetune new in competition prima che lo aggiornassi
 class LinearHead(nn.Module):
     def __init__(self, backbone, in_features, num_classes):
         super().__init__()
