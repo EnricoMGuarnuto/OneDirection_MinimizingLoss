@@ -3,9 +3,11 @@ import yaml
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, random_split
-from torchvision import transforms, datasets
+from torch.utils.data import DataLoader, random_split, Subset
+from torchvision import datasets, transforms
 from finetune import load_model  # usa il tuo script finetune.py
+from sklearn.model_selection import train_test_split
+from torch.utils.data import Subset
 
 def train_one_epoch(model, dataloader, optimizer, loss_fn, device):
     model.train()
@@ -43,15 +45,20 @@ def objective(trial):
     ])
 
     full_dataset = datasets.ImageFolder(cfg['data']['train_dir'], transform=transform)
+    num_classes = len(full_dataset.classes)
+
     val_size = int(len(full_dataset) * cfg['data'].get('val_split', 0.2))
     train_size = len(full_dataset) - val_size
-    train_ds, val_ds = random_split(full_dataset, [train_size, val_size])
+    train_indices, val_indices = torch.utils.data.random_split(
+        range(len(full_dataset)), [train_size, val_size], generator=torch.Generator().manual_seed(42)
+    )
+    train_ds = Subset(full_dataset, train_indices)
+    val_ds = Subset(full_dataset, val_indices)
 
     train_loader = DataLoader(train_ds, batch_size=cfg['data']['batch_size'], shuffle=True, num_workers=4)
     val_loader = DataLoader(val_ds, batch_size=cfg['data']['batch_size'], shuffle=False, num_workers=4)
 
-    num_classes = len(full_dataset.classes)
-    model = load_model(cfg, device, num_classes=num_classes)
+    model = load_model(cfg, device, num_classes)
 
     if freeze_backbone:
         for name, param in model.named_parameters():
@@ -77,9 +84,9 @@ def objective(trial):
         optimizer = optim.SGD(params_to_optimize, momentum=0.9)
 
     loss_fn = nn.CrossEntropyLoss()
-
     best_val_acc = 0.0
     num_epochs = cfg['training']['num_epochs']
+
     for epoch in range(num_epochs):
         train_loss, train_acc = train_one_epoch(model, train_loader, optimizer, loss_fn, device)
         model.eval()
@@ -87,10 +94,10 @@ def objective(trial):
         if val_acc > best_val_acc:
             best_val_acc = val_acc
 
-    return -best_val_acc  # minimize negative accuracy → maximize accuracy
+    return -best_val_acc  # Optuna minimizza → metto negativo
 
 if __name__ == '__main__':
     study = optuna.create_study(direction='minimize')
-    study.optimize(objective, n_trials=20)
+    study.optimize(objective, n_trials=10)
 
     print("✅ Best hyperparameters:", study.best_params)
