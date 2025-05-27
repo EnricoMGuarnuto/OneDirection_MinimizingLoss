@@ -13,7 +13,6 @@ import open_clip
 import torchvision.models as tv_models
 
 
-
 def load_model(cfg, device):
     name = cfg['model']['name']
     source = cfg['model'].get('source', 'torchvision')
