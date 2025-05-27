@@ -6,21 +6,22 @@ model:
   output_dim: 2048
 
 data:
-  train_dir: ""    #data/train
-  gallery_dir: ""  #data/test/gallery
-  query_dir: ""    #data/test/query
+  train_dir: ""    #competition/data/train
+  gallery_dir: ""  #competition/data/test/gallery
+  query_dir: ""    #competition/data/test/query
   img_size: 224
-  batch_size: 64
+  batch_size: 32
   normalization:
     mean: [0.485, 0.456, 0.406]
     std: [0.229, 0.224, 0.225]
-  val_split: 0.0
+  val_split: 0.1
 
 training:
   num_epochs: 10
   freeze_backbone: false
   lr_backbone: 1e-5
   lr_head: 1e-3
+  margin: 0.2
   save_checkpoint:    #competition/saved_models/resnet50_finetuned.pt
 
 retrieval:
