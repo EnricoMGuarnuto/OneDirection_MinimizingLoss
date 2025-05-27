@@ -9,6 +9,9 @@ from torch.utils.data import random_split, DataLoader
 from tqdm import tqdm
 import timm
 import open_clip
+from sklearn.model_selection import train_test_split
+from torch.utils.data import Subset
+
 
 
 def load_model(cfg, device, num_classes):
@@ -98,9 +101,21 @@ def main():
     ])
 
     full_dataset = datasets.ImageFolder(cfg['data']['train_dir'], transform=transform)
-    val_size = int(len(full_dataset) * cfg['data'].get('val_split', 0.2))
-    train_size = len(full_dataset) - val_size
-    train_ds, val_ds = random_split(full_dataset, [train_size, val_size])
+    # Estraiamo paths e labels
+    samples = full_dataset.samples  # lista di (path, class_idx)
+    paths, labels = zip(*samples)
+
+    # Creiamo indici stratificati
+    train_idx, val_idx = train_test_split(
+        range(len(paths)),
+        test_size=cfg['data'].get('val_split', 0.2),
+        stratify=labels,
+        random_state=42
+    )
+
+    # Costruiamo i sotto-dataset
+    train_ds = Subset(full_dataset, train_idx)
+    val_ds = Subset(full_dataset, val_idx)
 
     train_loader = DataLoader(train_ds, batch_size=cfg['data']['batch_size'], shuffle=True, num_workers=4)
     val_loader = DataLoader(val_ds, batch_size=cfg['data']['batch_size'], shuffle=False, num_workers=4)
