@@ -2,7 +2,7 @@ model:
   name: moco_resnet50
   source: moco
   pretrained: false
-  checkpoint_path: "saved_models/moco_v2_800ep_pretrain.pth.tar"  #saved_models/moco_resnet50_finetuned_triplet_better.pt
+  checkpoint_path: saved_models/moco_resnet50_cross_finetuned.pt
   output_dim: 2048
 
 data:

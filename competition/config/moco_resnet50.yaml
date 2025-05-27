@@ -1,0 +1,29 @@
+model:
+  name: moco_resnet50
+  source: custom
+  pretrained: false
+  checkpoint_path: competition/saved_models/moco_v2_800ep_pretrain.pth.tar
+  output_dim: 2048
+
+data:
+  train_dir:   #competition/data/new_animals/train
+  gallery_dir: #competition/data/new_animals/test/gallery
+  query_dir:   #competizion/data/new_animals/test/query
+  img_size: 224
+  batch_size: 32
+  normalization:
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+  val_split: 0.0
+
+training:
+  num_epochs: 10
+  freeze_backbone: false
+  lr_backbone: 1e-5
+  lr_head: 1e-3
+  optimizer: adam  # puoi mettere 'adam' o 'sgd' se lo script supporta la lettura
+  save_checkpoint: #competition/saved_models/moco_resnet50_finetuned_triplet.pt
+
+retrieval:
+  top_k: 10
+  output_json: #competition/results_moco_resnet50_finetuned.json
