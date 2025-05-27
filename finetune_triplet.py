@@ -98,7 +98,10 @@ def main():
         transforms.Normalize(mean=cfg['data']['normalization']['mean'], std=cfg['data']['normalization']['std'])
     ])
 
-    dataset = TripletDataset(cfg['data']['train_dir'], transform=transform)
+    # Assicuriamoci che il transform venga passato bene
+    dataset = TripletDataset(root_dir=cfg['data']['train_dir'], transform=transform)
+
+
     dataloader = DataLoader(dataset, batch_size=cfg['data']['batch_size'], shuffle=True, num_workers=4)
 
     model = load_model(cfg, device)
