@@ -1,0 +1,34 @@
+model:
+  name: RN50
+  source: open_clip
+  pretrained: true
+  checkpoint_path:  # saved_models/clip_rn50_finetuned.pt
+  output_dim: 1024
+
+data:
+  train_dir:     #competition/data/train
+  gallery_dir:   #competition/data/test/gallery
+  query_dir:     #competition/data/test/query
+  img_size: 224
+  batch_size: 64
+  normalization:
+    mean: [0.48145466, 0.4578275, 0.40821073]
+    std: [0.26862954, 0.26130258, 0.27577711]
+  val_split: 0.0
+
+training:
+  num_epochs: 10
+  freeze_backbone: false
+  lr_backbone: 1e-5
+  lr_head: 1e-3
+  save_checkpoint:   #saved_models/clip_rn50_finetuned.pt
+
+retrieval:
+  top_k: 10
+  output_json:     #competition/results_clip_rn50.json   (finetuned o no)
+
+
+
+
+
+
