@@ -69,9 +69,7 @@ py retrieval diversi:
 retrieval_clip.py --> per solo retrieval
 retrieval_clip_finetune.py --> per retrieval del modello finetuned 
 
-!!! CLIP FINETUNED: no ok. ho sbrugnato in ogni modo possibile, prima mi veniva accuracy uguale tra i due
-(come se non stesse finetunando), mentre con questa combinazione di codici viene accuracy di 3.3.
+CLIP FINETUNED: parlando con chat, non funziona bene con cross-entropy. quindi ho usato triplet loss.
+accuracy diminuisce: 98.64
 
-chat però dice:
-CLIP è già ottimizzato per feature extraction, ed è pre-addestrato su milioni di immagini con un obiettivo contrastivo. 
-Fine-tunarlo con cross-entropy può peggiorare le feature per retrieval se non lo fai con attenzione (es. freezing parziale, gradual unfreezing).
+-- MoCo v2 

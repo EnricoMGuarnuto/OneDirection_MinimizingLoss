@@ -8,16 +8,7 @@ from tqdm import tqdm
 import json
 import clip
 import torch.nn as nn
-
-class CLIPClassifier(nn.Module):
-    def __init__(self, clip_model, embed_dim=512, num_classes=90):
-        super().__init__()
-        self.clip_model = clip_model
-        self.head = nn.Linear(embed_dim, num_classes)
-
-    def forward(self, x):
-        x = self.clip_model.encode_image(x).float()
-        return self.head(x)
+from torchvision import transforms
 
 def get_image_paths(folder):
     all_files = []
@@ -30,12 +21,13 @@ def get_image_paths(folder):
 
 def extract_embeddings(model, preprocess, image_paths, root_folder, device):
     embeddings = {}
+    model.eval()
     with torch.no_grad():
         for rel_path in tqdm(image_paths, desc=f"Extracting features from {root_folder}"):
             img_path = os.path.join(root_folder, rel_path)
             img = Image.open(img_path).convert('RGB')
             img_tensor = preprocess(img).unsqueeze(0).to(device)
-            feature = model.clip_model.encode_image(img_tensor).squeeze().cpu().numpy()
+            feature = model(img_tensor).squeeze().cpu().numpy()
             embeddings[rel_path] = feature / np.linalg.norm(feature)
     return embeddings
 
@@ -55,6 +47,18 @@ def save_json(results, output_path):
         json.dump(results, f, indent=2)
     print(f"✅ Saved retrieval results to {output_path}")
 
+class CLIPWithHead(nn.Module):
+    def __init__(self, clip_model, output_dim=512):
+        super().__init__()
+        self.clip = clip_model
+        self.head = nn.Linear(512, output_dim)
+
+    def forward(self, x):
+        with torch.no_grad():
+            x = self.clip.encode_image(x).to(torch.float32)
+        x = self.head(x)
+        return nn.functional.normalize(x, p=2, dim=1)
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, required=True)
@@ -66,8 +70,8 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     clip_model, preprocess = clip.load("ViT-B/32", device=device, jit=False)
 
-    model = CLIPClassifier(clip_model, embed_dim=512, num_classes=90).to(device)
-    model.load_state_dict(torch.load(cfg['model']['checkpoint_path'], map_location=device), strict=False)
+    model = CLIPWithHead(clip_model, output_dim=cfg['model']['output_dim']).to(device)
+    model.load_state_dict(torch.load(cfg['model']['checkpoint_path'], map_location=device))
     model.eval()
 
     gallery_paths = get_image_paths(cfg['data']['gallery_dir'])
@@ -81,5 +85,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
