@@ -5,27 +5,64 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torchvision import transforms
+from torchvision import transforms, models
 from tqdm import tqdm
 import timm
 import open_clip
-from triplet_dataset import TripletDataset  # salva la classe che ti ho dato prima in questo file
+from triplet_dataset import TripletDataset  # Assicurati di avere questo file
+
+import torchvision.models as tv_models
 
 def load_model(cfg, device):
     name = cfg['model']['name']
     source = cfg['model'].get('source', 'torchvision')
     pretrained = cfg['model'].get('pretrained', True)
     checkpoint_path = cfg['model'].get('checkpoint_path', '')
+    num_classes = cfg['model'].get('num_classes', 1000)
 
-    if source == 'open_clip':
+    if name == 'moco_resnet50':
+        # Special handling for MoCo v2
+        model = tv_models.resnet50(pretrained=False)
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        state_dict = checkpoint['state_dict']
+        new_state_dict = {k.replace('module.encoder_q.', ''): v for k, v in state_dict.items() if k.startswith('module.encoder_q')}
+        model.load_state_dict(new_state_dict, strict=False)
+        model.fc = nn.Identity()  # remove final classification head
+        print(f"✅ Loaded MoCo v2 ResNet50 from {checkpoint_path}")
+
+    elif source == 'open_clip':
         model, _, _ = open_clip.create_model_and_transforms(name, pretrained='openai')
-        model = model.visual
-    else:
-        model = timm.create_model(name, pretrained=pretrained, num_classes=0)
+        model = model.visual  # only visual encoder
+        if checkpoint_path:
+            state_dict = torch.load(checkpoint_path, map_location=device)
+            model.load_state_dict(state_dict, strict=False)
+            print(f"✅ Loaded custom weights from {checkpoint_path}")
+        else:
+            print(f"✅ Loaded {name} with pretrained weights from open_clip")
 
-    if checkpoint_path:
-        model.load_state_dict(torch.load(checkpoint_path, map_location=device), strict=False)
-        print(f"✅ Loaded weights from {checkpoint_path}")
+    elif source == 'timm':
+        model = timm.create_model(name, pretrained=pretrained, num_classes=num_classes)
+        if checkpoint_path:
+            state_dict = torch.load(checkpoint_path, map_location=device)
+            filtered_state_dict = {k: v for k, v in state_dict.items() if not k.startswith('fc.') and not k.startswith('classifier.')}
+            model.load_state_dict(filtered_state_dict, strict=False)
+            print(f"✅ Loaded custom backbone weights from {checkpoint_path}")
+        model.reset_classifier(0, '')  # remove classifier head
+        print(f"✅ Loaded {name} from timm")
+
+    else:
+        model_fn = getattr(tv_models, name)
+        model = model_fn(pretrained=pretrained)
+        if checkpoint_path:
+            state_dict = torch.load(checkpoint_path, map_location=device)
+            filtered_state_dict = {k: v for k, v in state_dict.items() if not k.startswith('fc.') and not k.startswith('classifier.')}
+            model.load_state_dict(filtered_state_dict, strict=False)
+            print(f"✅ Loaded custom backbone weights from {checkpoint_path}")
+        if hasattr(model, 'fc'):
+            model.fc = nn.Identity()
+        elif hasattr(model, 'classifier'):
+            model.classifier = nn.Identity()
+        print(f"✅ Loaded {name} from torchvision")
 
     return model.to(device)
 
@@ -33,10 +70,7 @@ def train_one_epoch(model, dataloader, optimizer, loss_fn, device):
     model.train()
     total_loss = 0.0
     for anchor, positive, negative in tqdm(dataloader, desc="Training"):
-        anchor = anchor.to(device)
-        positive = positive.to(device)
-        negative = negative.to(device)
-
+        anchor, positive, negative = anchor.to(device), positive.to(device), negative.to(device)
         anchor_emb = model(anchor)
         positive_emb = model(positive)
         negative_emb = model(negative)

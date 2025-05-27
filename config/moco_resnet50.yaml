@@ -1,10 +1,8 @@
-# YAML example for fine-tuning + retrieval ResNet models
-
 model:
-  name: resnet50
-  source: torchvision
-  pretrained: true
-  checkpoint_path: saved_models/resnet50_triplet.pt
+  name: moco_resnet50
+  source: custom
+  pretrained: false
+  checkpoint_path: saved_models/moco_resnet50_finetuned_triplet.pt
   output_dim: 2048
 
 data:
@@ -23,8 +21,10 @@ training:
   freeze_backbone: false
   lr_backbone: 1e-5
   lr_head: 1e-3
-  save_checkpoint: saved_models/resnet50_triplet.pt
+  optimizer: adam  # puoi mettere 'adam' o 'sgd' se lo script supporta la lettura
+  save_checkpoint: saved_models/moco_resnet50_finetuned_triplet.pt
 
 retrieval:
   top_k: 10
-  output_json: results_resnet50_finetuned_triplet.json
+  output_json: results_moco_resnet50_finetuned.json
+
