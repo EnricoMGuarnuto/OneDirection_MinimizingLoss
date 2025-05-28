@@ -5,9 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split, Subset
 from torchvision import datasets, transforms
-from finetune import load_model  # usa il tuo script finetune.py
-from sklearn.model_selection import train_test_split
-from torch.utils.data import Subset
+from finetune import load_model
 
 def train_one_epoch(model, dataloader, optimizer, loss_fn, device):
     model.train()
@@ -23,6 +21,22 @@ def train_one_epoch(model, dataloader, optimizer, loss_fn, device):
         _, preds = torch.max(outputs, 1)
         correct += (preds == labels).sum().item()
         total += labels.size(0)
+    avg_loss = total_loss / total
+    acc = correct / total
+    return avg_loss, acc
+
+def evaluate(model, dataloader, loss_fn, device):
+    model.eval()
+    total_loss, correct, total = 0.0, 0, 0
+    with torch.no_grad():
+        for inputs, labels in dataloader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            outputs = model(inputs)
+            loss = loss_fn(outputs, labels)
+            total_loss += loss.item() * inputs.size(0)
+            _, preds = torch.max(outputs, 1)
+            correct += (preds == labels).sum().item()
+            total += labels.size(0)
     avg_loss = total_loss / total
     acc = correct / total
     return avg_loss, acc
@@ -75,9 +89,6 @@ def objective(trial):
     if backbone_params:
         params_to_optimize.append({'params': backbone_params, 'lr': lr_backbone})
 
-    if not params_to_optimize:
-        raise ValueError("⚠ Nessun parametro da ottimizzare! Controlla freeze_backbone o aggiungi un head.")
-
     if optimizer_name == 'adam':
         optimizer = optim.Adam(params_to_optimize)
     else:
@@ -89,15 +100,13 @@ def objective(trial):
 
     for epoch in range(num_epochs):
         train_loss, train_acc = train_one_epoch(model, train_loader, optimizer, loss_fn, device)
-        model.eval()
-        val_loss, val_acc = train_one_epoch(model, val_loader, optimizer, loss_fn, device)
+        val_loss, val_acc = evaluate(model, val_loader, loss_fn, device)
         if val_acc > best_val_acc:
             best_val_acc = val_acc
 
-    return -best_val_acc  # Optuna minimizza → metto negativo
+    return -best_val_acc
 
 if __name__ == '__main__':
     study = optuna.create_study(direction='minimize')
     study.optimize(objective, n_trials=10)
-
     print("✅ Best hyperparameters:", study.best_params)
