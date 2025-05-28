@@ -7,10 +7,11 @@ from torchvision import models
 from PIL import Image
 from tqdm import tqdm
 import json
-import timm  # use timm for flexible model loading
+import timm
 import torch.nn as nn
 import open_clip
 import torchvision.models as tv_models
+from submit import submit  # importa la funzione ufficiale
 
 
 # Function provided by organizers (placeholder)
@@ -115,27 +116,23 @@ def extract_embeddings(model, image_paths, root_folder, device, img_size, norm_m
 def compute_topk(query_embeddings, gallery_embeddings, k):
     gallery_files = list(gallery_embeddings.keys())
     gallery_feats = np.stack(list(gallery_embeddings.values()))
-    results = {}  # ⬅ cambio da lista a dizionario
+    results = {}
     for query_file, query_feat in tqdm(query_embeddings.items(), desc="Computing retrieval"):
         sims = np.dot(gallery_feats, query_feat)
         topk_idx = np.argsort(sims)[-k:][::-1]
         topk_files = [gallery_files[i] for i in topk_idx]
-        results[query_file] = topk_files  # ⬅ salva direttamente come chiave
+        results[query_file] = topk_files
     return results
 
-
-def save_json(results, output_path, group_name=None):
+def save_json(results, output_path):
     with open(output_path, 'w') as f:
         json.dump(results, f, indent=2)
     print(f"✅ Saved retrieval results to {output_path}")
 
-    if group_name:
-        submit(results, group_name)
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, required=True, help='Path to config YAML file')
+    parser.add_argument('--group', type=str, required=True, help='Group name for submission')
     args = parser.parse_args()
 
     with open(args.config, 'r') as f:
@@ -163,6 +160,8 @@ def main():
 
     retrieval_results = compute_topk(query_embeddings, gallery_embeddings, top_k)
     save_json(retrieval_results, output_json)
+
+    submit(retrieval_results, args.group)
 
 if __name__ == '__main__':
     main()
