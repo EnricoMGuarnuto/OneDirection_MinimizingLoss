@@ -2,13 +2,13 @@ model:
   name: ViT-B/32
   source: open_clip
   pretrained: true
-  checkpoint_path: #competition/saved_models/clip_vitb32_trpl_finetuned.pt
+  checkpoint_path: #competition/saved_models/clip_vitb32_trpl.pt
   output_dim: 512
 
 data:
-  train_dir:    #competition/data/train
-  gallery_dir:  #competition/data/test/gallery
-  query_dir:    #competition/data/test/query
+  train_dir:    #competition/data/Data_example/training
+  gallery_dir:  #competition/data/Data_example/test/gallery
+  query_dir:    #competition/data/Data_example/test/query
   img_size: 224
   batch_size: 32
   normalization:
@@ -22,8 +22,8 @@ training:
   lr_backbone: 1e-5
   lr_head: 1e-3
   margin: 0.2
-  save_checkpoint:    #competition/saved_models/clip_vitb32_trpl_finetuned.pt
+  save_checkpoint:   #competition/saved_models/clip_vitb32_finetuned.pt
 
 retrieval:
   top_k: 10
-  output_json:     #competition/results_clip_vitb32.json   (finetuned o no)
+  output_json:    #competition/results_clip_vitb32_finetuned.json  

@@ -1,14 +1,14 @@
 model:
   name: moco_resnet50
-  source: custom
+  source: moco
   pretrained: true
-  checkpoint_path: competition/saved_models/moco_v2_800ep_pretrain.pth.tar
+  checkpoint_path: #competition/saved_models/moco_v2_800ep_pretrain.pth.tar
   output_dim: 2048
 
 data:
-  train_dir:   #competition/data/new_animals/train
-  gallery_dir: #competition/data/new_animals/test/gallery
-  query_dir:   #competizion/data/new_animals/test/query
+  train_dir:   #competition/data/Data_example/training
+  gallery_dir: #competition/data/Data_example/test/gallery
+  query_dir:   #competition/data/Data_example/test/query
   img_size: 224
   batch_size: 32
   normalization:
@@ -17,14 +17,14 @@ data:
   val_split: 0.1
 
 training:
-  num_epochs: 10
+  num_epochs: 20
   freeze_backbone: false
   lr_backbone: 1e-5
   lr_head: 1e-3
   optimizer: adam  # puoi mettere 'adam' o 'sgd' se lo script supporta la lettura
   margin: 0.2
-  save_checkpoint: #competition/saved_models/moco_resnet50_finetuned_triplet.pt  (triplet o cross)
+  save_checkpoint: #competition/saved_models/moco_resnet50_finetuned.pt  (cross o triplet)
 
 retrieval:
   top_k: 10
-  output_json: #competition/results_moco_resnet50_finetuned_triplet.json  (triplet o cross)
+  output_json: #competition/results_moco_resnet50_finetuned.json  (cross o triplet)
