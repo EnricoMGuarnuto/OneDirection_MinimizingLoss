@@ -131,15 +131,24 @@ def main():
 
     os.makedirs(os.path.dirname(cfg['training']['save_checkpoint']), exist_ok=True)
 
+    save_path = cfg['training']['save_checkpoint']
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    best_loss = float('inf')
+
     for epoch in range(cfg['training']['num_epochs']):
         print(f"\n🌟 Epoch {epoch + 1}/{cfg['training']['num_epochs']}")
         epoch_loss = train_one_epoch(model, train_loader, optimizer, loss_fn, device)
         print(f"Epoch Loss: {epoch_loss:.4f}")
 
-        torch.save(model.state_dict(), cfg['training']['save_checkpoint'])
-        print(f"✅ Saved model to {cfg['training']['save_checkpoint']}")
+        if epoch_loss < best_loss:
+            best_loss = epoch_loss
+            torch.save(model.state_dict(), save_path)
+            print(f"✅ Saved best model to {save_path} (loss improved)")
+        else:
+            print("ℹ️ Loss did not improve. Skipping save.")
 
-    print("🏁 Final training completed. Model ready for retrieval!")
+
+        print("🏁 Final training completed. Model ready for retrieval!")
 
 
 if __name__ == '__main__':

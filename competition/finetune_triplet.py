@@ -5,34 +5,76 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torchvision import transforms, models
+from torchvision import transforms, models as tv_models
 from tqdm import tqdm
 import timm
 import open_clip
-from triplet_dataset import TripletDataset  # Assicurati di avere questo file
+from torch.utils.data import Dataset
+from PIL import Image
+import random
 
-import torchvision.models as tv_models
+class TripletDataset(Dataset):
+    def __init__(self, root_dir, transform=None):
+        self.root_dir = root_dir
+        self.transform = transform
+
+        # Solo directory (classi), esclude .DS_Store e file simili
+        self.classes = [d for d in os.listdir(root_dir)
+                        if os.path.isdir(os.path.join(root_dir, d))]
+
+        # Mappa classe -> lista di immagini
+        self.class_to_imgs = {}
+        for cls in self.classes:
+            cls_path = os.path.join(root_dir, cls)
+            images = [os.path.join(cls_path, img)
+                      for img in os.listdir(cls_path)
+                      if img.lower().endswith(('.png', '.jpg', '.jpeg')) and
+                         os.path.isfile(os.path.join(cls_path, img))]
+            if len(images) >= 2:
+                self.class_to_imgs[cls] = images
+
+        self.triplet_sources = [(cls, img_path)
+                                for cls, imgs in self.class_to_imgs.items()
+                                for img_path in imgs]
+
+    def __len__(self):
+        return len(self.triplet_sources)
+
+    def __getitem__(self, idx):
+        anchor_cls, anchor_path = self.triplet_sources[idx]
+        positive_path = random.choice([p for p in self.class_to_imgs[anchor_cls] if p != anchor_path])
+        negative_cls = random.choice([c for c in self.classes if c != anchor_cls])
+        negative_path = random.choice(self.class_to_imgs[negative_cls])
+
+        anchor = Image.open(anchor_path).convert('RGB')
+        positive = Image.open(positive_path).convert('RGB')
+        negative = Image.open(negative_path).convert('RGB')
+
+        if self.transform:
+            anchor = self.transform(anchor)
+            positive = self.transform(positive)
+            negative = self.transform(negative)
+
+        return anchor, positive, negative
 
 def load_model(cfg, device):
     name = cfg['model']['name']
     source = cfg['model'].get('source', 'torchvision')
     pretrained = cfg['model'].get('pretrained', True)
     checkpoint_path = cfg['model'].get('checkpoint_path', '')
-    num_classes = cfg['model'].get('num_classes', 1000)
 
     if name == 'moco_resnet50':
-        # Special handling for MoCo v2
         model = tv_models.resnet50(pretrained=False)
         checkpoint = torch.load(checkpoint_path, map_location=device)
         state_dict = checkpoint['state_dict']
         new_state_dict = {k.replace('module.encoder_q.', ''): v for k, v in state_dict.items() if k.startswith('module.encoder_q')}
         model.load_state_dict(new_state_dict, strict=False)
-        model.fc = nn.Identity()  # remove final classification head
+        model.fc = nn.Identity()
         print(f"✅ Loaded MoCo v2 ResNet50 from {checkpoint_path}")
 
     elif source == 'open_clip':
         model, _, _ = open_clip.create_model_and_transforms(name, pretrained='openai')
-        model = model.visual  # only visual encoder
+        model = model.visual
         if checkpoint_path:
             state_dict = torch.load(checkpoint_path, map_location=device)
             model.load_state_dict(state_dict, strict=False)
@@ -41,13 +83,12 @@ def load_model(cfg, device):
             print(f"✅ Loaded {name} with pretrained weights from open_clip")
 
     elif source == 'timm':
-        model = timm.create_model(name, pretrained=pretrained, num_classes=num_classes)
+        model = timm.create_model(name, pretrained=pretrained)
         if checkpoint_path:
             state_dict = torch.load(checkpoint_path, map_location=device)
-            filtered_state_dict = {k: v for k, v in state_dict.items() if not k.startswith('fc.') and not k.startswith('classifier.')}
-            model.load_state_dict(filtered_state_dict, strict=False)
-            print(f"✅ Loaded custom backbone weights from {checkpoint_path}")
-        model.reset_classifier(0, '')  # remove classifier head
+            model.load_state_dict(state_dict, strict=False)
+            print(f"✅ Loaded weights from {checkpoint_path}")
+        model.reset_classifier(0)
         print(f"✅ Loaded {name} from timm")
 
     else:
@@ -55,9 +96,8 @@ def load_model(cfg, device):
         model = model_fn(pretrained=pretrained)
         if checkpoint_path:
             state_dict = torch.load(checkpoint_path, map_location=device)
-            filtered_state_dict = {k: v for k, v in state_dict.items() if not k.startswith('fc.') and not k.startswith('classifier.')}
-            model.load_state_dict(filtered_state_dict, strict=False)
-            print(f"✅ Loaded custom backbone weights from {checkpoint_path}")
+            model.load_state_dict(state_dict, strict=False)
+            print(f"✅ Loaded weights from {checkpoint_path}")
         if hasattr(model, 'fc'):
             model.fc = nn.Identity()
         elif hasattr(model, 'classifier'):
@@ -98,39 +138,32 @@ def main():
         transforms.Normalize(mean=cfg['data']['normalization']['mean'], std=cfg['data']['normalization']['std'])
     ])
 
-    # Assicuriamoci che il transform venga passato bene
     dataset = TripletDataset(root_dir=cfg['data']['train_dir'], transform=transform)
-
-
     dataloader = DataLoader(dataset, batch_size=cfg['data']['batch_size'], shuffle=True, num_workers=4)
 
     model = load_model(cfg, device)
+    optimizer = optim.Adam(model.parameters(), lr=float(cfg['training']['lr_backbone']))
+    loss_fn = nn.TripletMarginLoss(margin=1.0, p=2)
 
-    optimizer_name = cfg['training'].get('optimizer', 'adam').lower()
-    lr = float(cfg['training']['lr_backbone'])  # uso solo uno, perché non abbiamo testa in triplet
-    margin = float(cfg['training'].get('margin', 1.0))
-
-    if optimizer_name == 'adam':
-        optimizer = optim.Adam(model.parameters(), lr=lr)
-    elif optimizer_name == 'sgd':
-        optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    else:
-        raise ValueError(f"Optimizer {optimizer_name} not supported")
-
-    loss_fn = nn.TripletMarginLoss(margin=margin, p=2)
-
-
-    os.makedirs(os.path.dirname(cfg['training']['save_checkpoint']), exist_ok=True)
+    save_path = cfg['training']['save_checkpoint']
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    best_loss = float('inf')
 
     for epoch in range(cfg['training']['num_epochs']):
         print(f"\n🌟 Epoch {epoch + 1}/{cfg['training']['num_epochs']}")
         epoch_loss = train_one_epoch(model, dataloader, optimizer, loss_fn, device)
         print(f"Epoch Loss: {epoch_loss:.4f}")
 
-        torch.save(model.state_dict(), cfg['training']['save_checkpoint'])
-        print(f"✅ Saved model to {cfg['training']['save_checkpoint']}")
+        if epoch_loss < best_loss:
+            best_loss = epoch_loss
+            torch.save(model.state_dict(), save_path)
+            print(f"✅ Saved best model to {save_path} (loss improved)")
+        else:
+            print("ℹ️ Loss did not improve. Skipping save.")
 
-    print("🏁 Training completed.")
+
+        print("🏁 Final training completed. Model ready for retrieval!")
+
 
 if __name__ == '__main__':
     main()
