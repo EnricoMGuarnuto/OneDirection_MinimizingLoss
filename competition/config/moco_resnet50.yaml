@@ -21,7 +21,6 @@ training:
   freeze_backbone: false
   lr_backbone: 1e-5
   lr_head: 1e-3
-  optimizer: adam  # puoi mettere 'adam' o 'sgd' se lo script supporta la lettura
   margin: 0.2
   save_checkpoint: #competition/saved_models/moco_resnet50_finetuned.pt  (cross o triplet)
 

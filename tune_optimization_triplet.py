@@ -30,7 +30,6 @@ def objective(trial):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # Hyperparameters to optimize
     lr = trial.suggest_float('lr', 1e-6, 1e-3, log=True)
     optimizer_name = trial.suggest_categorical('optimizer', ['adam', 'sgd'])
     margin = trial.suggest_float('margin', 0.1, 1.0)
@@ -52,12 +51,17 @@ def objective(trial):
         optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
 
     loss_fn = nn.TripletMarginLoss(margin=margin, p=2)
+    num_epochs = cfg['training'].get('num_epochs', 5)
+    best_loss = float('inf')
 
-    epoch_loss = train_one_epoch(model, dataloader, optimizer, loss_fn, device)
-    return epoch_loss
+    for epoch in range(num_epochs):
+        epoch_loss = train_one_epoch(model, dataloader, optimizer, loss_fn, device)
+        if epoch_loss < best_loss:
+            best_loss = epoch_loss
+
+    return best_loss
 
 if __name__ == '__main__':
     study = optuna.create_study(direction='minimize')
     study.optimize(objective, n_trials=20)
-
     print("✅ Best hyperparameters:", study.best_params)
