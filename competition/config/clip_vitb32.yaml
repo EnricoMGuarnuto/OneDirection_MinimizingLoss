@@ -2,13 +2,13 @@ model:
   name: ViT-B/32
   source: open_clip
   pretrained: true
-  checkpoint_path: #competition/saved_models/clip_vitb32_trpl.pt
+  checkpoint_path: 
   output_dim: 512
 
 data:
-  train_dir:    #competition/data/Data_example/training
-  gallery_dir:  #competition/data/Data_example/test/gallery
-  query_dir:    #competition/data/Data_example/test/query
+  train_dir:    data/train
+  gallery_dir:  data/test/gallery
+  query_dir:    data/test/query
   img_size: 224
   batch_size: 32
   normalization:
