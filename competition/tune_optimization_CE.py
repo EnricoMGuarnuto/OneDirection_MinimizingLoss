@@ -50,7 +50,14 @@ def objective(trial):
     lr_head = trial.suggest_float('lr_head', 1e-4, 1e-2, log=True)
     lr_backbone = trial.suggest_float('lr_backbone', 1e-6, 1e-4, log=True)
     optimizer_name = trial.suggest_categorical('optimizer', ['adam', 'sgd'])
-    freeze_backbone = trial.suggest_categorical('freeze_backbone', [False, True])
+    freeze_backbone = False  # sempre allenabile
+
+    if freeze_backbone:
+        for name, param in model.named_parameters():
+            if 'fc' not in name and 'classifier' not in name:
+                param.requires_grad = False
+        print("✅ Backbone frozen")
+
 
     transform = transforms.Compose([
         transforms.Resize((cfg['data']['img_size'], cfg['data']['img_size'])),

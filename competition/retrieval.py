@@ -12,6 +12,7 @@ import torch.nn as nn
 import open_clip
 import torchvision.models as tv_models
 from submit import submit  # importa la funzione ufficiale
+from torch.utils.data import Dataset, DataLoader
 
 
 # Function provided by organizers (placeholder)
@@ -23,6 +24,22 @@ from submit import submit  # importa la funzione ufficiale
 #     with open(f"{group_name}_submission.json", "w") as f:
 #         json.dump(results_dict, f, indent=2)
 #     print(f"✅ Submission dictionary saved as {group_name}_submission.json")
+
+
+class ImageDataset(Dataset):
+    def __init__(self, image_paths, root_folder, transform):
+        self.image_paths = image_paths
+        self.root_folder = root_folder
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.image_paths)
+
+    def __getitem__(self, idx):
+        rel_path = self.image_paths[idx]
+        img_path = os.path.join(self.root_folder, rel_path)
+        img = Image.open(img_path).convert('RGB')
+        return self.transform(img), rel_path
 
 def load_model(cfg, device):
     name = cfg['model']['name']
@@ -48,7 +65,7 @@ def load_model(cfg, device):
 
 
     elif source == 'open_clip':
-        model, _, _ = open_clip.create_model_and_transforms(name, pretrained='openai')
+        model, _, _ = open_clip.create_model_and_transforms(name, pretrained=pretrained)
         model = model.visual  # only visual encoder
         if checkpoint_path:
             state_dict = torch.load(checkpoint_path, map_location=device)
@@ -91,26 +108,28 @@ def get_image_paths(folder):
                 all_files.append(file)
     return sorted(all_files)
 
-def extract_embeddings(model, image_paths, root_folder, device, img_size, norm_mean, norm_std, source, name):
+def extract_embeddings(model, image_paths, root_folder, device, img_size, norm_mean, norm_std, source, name, pretrained_tag, batch_size):
     if source == 'open_clip':
-        import open_clip
-        _, _, preprocess = open_clip.create_model_and_transforms(name, pretrained='openai')
+        _, _, preprocess = open_clip.create_model_and_transforms(name, pretrained=pretrained_tag)
     else:
-        from torchvision import transforms
         preprocess = transforms.Compose([
             transforms.Resize((img_size, img_size)),
             transforms.ToTensor(),
             transforms.Normalize(mean=norm_mean, std=norm_std)
         ])
 
+    dataset = ImageDataset(image_paths, root_folder, preprocess)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=8)
+
     embeddings = {}
+    model.eval()
     with torch.no_grad():
-        for rel_path in tqdm(image_paths, desc=f"Extracting features from {root_folder}"):
-            img_path = os.path.join(root_folder, rel_path)
-            img = Image.open(img_path).convert('RGB')
-            img_tensor = preprocess(img).unsqueeze(0).to(device)
-            feature = model(img_tensor).squeeze().cpu().numpy()
-            embeddings[rel_path] = feature / np.linalg.norm(feature)
+        for batch_imgs, batch_paths in tqdm(dataloader, desc=f"Extracting features from {root_folder}"):
+            batch_imgs = batch_imgs.to(device)
+            feats = model(batch_imgs).cpu().numpy()
+            feats = feats / np.linalg.norm(feats, axis=1, keepdims=True)
+            for path, feat in zip(batch_paths, feats):
+                embeddings[path] = feat
     return embeddings
 
 def compute_topk(query_embeddings, gallery_embeddings, k):
@@ -144,6 +163,7 @@ def main():
     gallery_dir = cfg['data']['gallery_dir']
     query_dir = cfg['data']['query_dir']
     img_size = cfg['data'].get('img_size', 224)
+    batch_size = cfg['data'].get('batch_size', 1)
     norm_mean = cfg['data'].get('normalization', {}).get('mean', [0.485, 0.456, 0.406])
     norm_std = cfg['data'].get('normalization', {}).get('std', [0.229, 0.224, 0.225])
     top_k = cfg['retrieval'].get('top_k', 10)
@@ -151,12 +171,14 @@ def main():
 
     source = cfg['model'].get('source', 'torchvision')
     name = cfg['model']['name']
+    
+    pretrained = cfg['model']['pretrained']
 
     gallery_paths = get_image_paths(gallery_dir)
     query_paths = get_image_paths(query_dir)
 
-    gallery_embeddings = extract_embeddings(model, gallery_paths, gallery_dir, device, img_size, norm_mean, norm_std, source, name)
-    query_embeddings = extract_embeddings(model, query_paths, query_dir, device, img_size, norm_mean, norm_std, source, name)
+    gallery_embeddings = extract_embeddings(model, gallery_paths, gallery_dir, device, img_size, norm_mean, norm_std, source, name, pretrained, batch_size)
+    query_embeddings = extract_embeddings(model, query_paths, query_dir, device, img_size, norm_mean, norm_std, source, name, pretrained, batch_size)
 
     retrieval_results = compute_topk(query_embeddings, gallery_embeddings, top_k)
     save_json(retrieval_results, output_json)
