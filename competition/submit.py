@@ -2,7 +2,7 @@ import json
 import requests
 
 
-def submit(results, groupname, url="http://65.108.245.177:3001/retrieval/"):
+def submit(results, groupname, url="http://tatooine.disi.unitn.it:3001/retrieval/"):
     res = {}
     res["groupname"] = groupname
     res["images"] = results

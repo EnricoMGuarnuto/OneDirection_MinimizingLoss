@@ -2,7 +2,7 @@ model:
   name: ViT-B/32
   source: open_clip
   pretrained: true
-  checkpoint_path: 
+  checkpoint_path: saved_models/clip_vitb32_finetuned_triplet.pt
   output_dim: 512
 
 data:
@@ -22,8 +22,8 @@ training:
   lr_backbone: 1e-5
   lr_head: 1e-3
   margin: 0.2
-  save_checkpoint:   #competition/saved_models/clip_vitb32_finetuned.pt
+  save_checkpoint:  saved_models/clip_vitb32_finetuned_triplet.pt
 
 retrieval:
   top_k: 10
-  output_json:    #competition/results_clip_vitb32_finetuned.json  
+  output_json:    results_clip_vitb32_finetuned_triplet.json 
