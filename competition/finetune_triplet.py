@@ -9,17 +9,41 @@ from torchvision import transforms
 from tqdm import tqdm
 import open_clip
 from triplet_dataset import TripletDataset
+from torchvision import models as tv_models
+import timm  # if needed for future support
 
 def load_model(cfg, device):
     name = cfg['model']['name']
-    model, _, _ = open_clip.create_model_and_transforms(name, pretrained='openai')
-    model = model.visual  # solo visual encoder
-    if cfg['model'].get('checkpoint_path'):
-        state_dict = torch.load(cfg['model']['checkpoint_path'], map_location=device)
-        model.load_state_dict(state_dict, strict=False)
-        print(f"✅ Loaded custom weights from {cfg['model']['checkpoint_path']}")
+    source = cfg['model'].get('source', 'open_clip')  # default to open_clip for backward compatibility
+    checkpoint_path = cfg['model'].get('checkpoint_path', '')
+    pretrained = cfg['model'].get('pretrained', True)
+
+    if source == 'open_clip':
+        model, _, _ = open_clip.create_model_and_transforms(name, pretrained='openai')
+        model = model.visual
+        if checkpoint_path:
+            state_dict = torch.load(checkpoint_path, map_location=device)
+            model.load_state_dict(state_dict, strict=False)
+            print(f"✅ Loaded custom weights from {checkpoint_path}")
+        else:
+            print(f"✅ Loaded {name} with pretrained weights from open_clip")
+
+    elif source == 'torchvision':
+        model_fn = getattr(tv_models, name)
+        model = model_fn(pretrained=pretrained)
+        if hasattr(model, 'fc'):
+            model.fc = nn.Identity()
+        elif hasattr(model, 'classifier'):
+            model.classifier = nn.Identity()
+        if checkpoint_path:
+            state_dict = torch.load(checkpoint_path, map_location=device)
+            model.load_state_dict(state_dict, strict=False)
+            print(f"✅ Loaded ResNet50 weights from {checkpoint_path}")
+        print(f"✅ Loaded {name} from torchvision")
+
     else:
-        print(f"✅ Loaded {name} with pretrained weights from open_clip")
+        raise ValueError(f"Unsupported model source: {source}")
+
     return model.to(device)
 
 def train_one_epoch(model, dataloader, optimizer, loss_fn, device):

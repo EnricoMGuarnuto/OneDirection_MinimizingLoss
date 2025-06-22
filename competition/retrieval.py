@@ -13,6 +13,7 @@ import open_clip
 import torchvision.models as tv_models
 from submit import submit  # importa la funzione ufficiale
 from torch.utils.data import Dataset, DataLoader
+from torchvision import models, transforms
 
 
 # Function provided by organizers (placeholder)
