@@ -7,6 +7,8 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from finetune_triplet import load_model
 from triplet_dataset import TripletDataset
+import os
+import argparse
 
 def train_one_epoch(model, dataloader, optimizer, loss_fn, device):
     model.train()
@@ -24,10 +26,7 @@ def train_one_epoch(model, dataloader, optimizer, loss_fn, device):
         total_loss += loss.item()
     return total_loss / len(dataloader)
 
-def objective(trial):
-    with open('config/clip_vitb32.yaml', 'r') as f:
-        cfg = yaml.safe_load(f)
-
+def objective(trial, cfg):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     lr = trial.suggest_float('lr', 1e-6, 1e-3, log=True)
@@ -50,18 +49,31 @@ def objective(trial):
     else:
         optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
 
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2, verbose=True)
     loss_fn = nn.TripletMarginLoss(margin=margin, p=2)
     num_epochs = cfg['training'].get('num_epochs', 10)
     best_loss = float('inf')
 
+    os.makedirs('best_models', exist_ok=True)
+    checkpoint_path = f"best_models/model_triplet_trial_{trial.number}.pt"
+
     for epoch in range(num_epochs):
         epoch_loss = train_one_epoch(model, dataloader, optimizer, loss_fn, device)
+        scheduler.step(epoch_loss)
         if epoch_loss < best_loss:
             best_loss = epoch_loss
+            torch.save(model.state_dict(), checkpoint_path)
 
     return best_loss
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, required=True, help='Path to config YAML')
+    args = parser.parse_args()
+
+    with open(args.config, 'r') as f:
+        cfg = yaml.safe_load(f)
+
     study = optuna.create_study(direction='minimize')
-    study.optimize(objective, n_trials=15)
+    study.optimize(lambda trial: objective(trial, cfg), n_trials=30)
     print("✅ Best hyperparameters:", study.best_params)
