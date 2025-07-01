@@ -2,7 +2,7 @@ model:
   name: resnet50
   source: torchvision
   pretrained: true
-  checkpoint_path: #saved_models/resnet50_finetuned_triplet.pt
+  checkpoint_path: #saved_models/resnet50_finetuned_ce.pt
   output_dim: 2048
 
 data:
@@ -22,8 +22,8 @@ training:
   lr_backbone: 1e-5
   lr_head: 1e-3
   margin: 0.2
-  save_checkpoint:  saved_models/resnet50_finetuned_ce_opt.pt
+  save_checkpoint:  #saved_models/resnet50_finetuned_ce_opt.pt
 
 retrieval:
   top_k: 10
-  output_json: results_resnet50_finetuned_ce_opt.json  
+  output_json: results_resnet50.json  

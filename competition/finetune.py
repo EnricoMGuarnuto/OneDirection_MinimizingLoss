@@ -7,8 +7,6 @@ import torch.optim as optim
 from torchvision import datasets, transforms, models
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import timm
-import open_clip
 
 
 class LinearHead(nn.Module):
@@ -28,28 +26,7 @@ def load_model(cfg, device, num_classes):
     pretrained = cfg['model'].get('pretrained', True)
     checkpoint_path = cfg['model'].get('checkpoint_path', '')
 
-    if source == 'open_clip':
-        model, _, _ = open_clip.create_model_and_transforms(name, pretrained='openai')
-        model = model.visual
-        in_features = model.output_dim
-        model = LinearHead(model, in_features, num_classes)
-        if checkpoint_path:
-            state_dict = torch.load(checkpoint_path, map_location=device)
-            model.load_state_dict(state_dict, strict=False)
-            print(f"✅ Loaded custom weights from {checkpoint_path}")
-        else:
-            print(f"✅ Loaded {name} with pretrained weights from open_clip")
-
-    elif source == 'timm':
-        model = timm.create_model(name, pretrained=pretrained, num_classes=num_classes)
-        if checkpoint_path:
-            model.load_state_dict(torch.load(checkpoint_path, map_location=device), strict=False)
-            print(f"✅ Loaded weights from {checkpoint_path}")
-        else:
-            print(f"✅ Loaded {name} with pretrained={pretrained}")
-        model.reset_classifier(num_classes)
-
-    elif source == 'torchvision':
+    if source == 'torchvision':
         model_fn = getattr(models, name)
         model = model_fn(pretrained=pretrained)
         in_features = model.fc.in_features
@@ -59,18 +36,6 @@ def load_model(cfg, device, num_classes):
             print(f"✅ Loaded weights from {checkpoint_path}")
         else:
             print(f"✅ Loaded {name} with pretrained={pretrained}")
-
-    elif source == 'moco':
-        from torchvision.models.resnet import resnet50
-        model = resnet50()
-        if checkpoint_path:
-            ckpt = torch.load(checkpoint_path, map_location=device)
-            if 'state_dict' in ckpt:
-                ckpt = {k.replace('module.encoder_q.', ''): v for k, v in ckpt['state_dict'].items() if 'encoder_q' in k}
-                model.load_state_dict(ckpt, strict=False)
-            print(f"✅ Loaded MoCo weights from {checkpoint_path}")
-        in_features = model.fc.in_features
-        model.fc = nn.Linear(in_features, num_classes)
 
     return model.to(device)
 

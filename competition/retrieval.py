@@ -11,20 +11,11 @@ import timm
 import torch.nn as nn
 import open_clip
 import torchvision.models as tv_models
-from submit import submit  # importa la funzione ufficiale
+from submit import submit 
 from torch.utils.data import Dataset, DataLoader
 from torchvision import models, transforms
 
 
-# Function provided by organizers (placeholder)
-# def submit(results_dict, group_name):
-#     # Replace with actual submission logic
-#     print(f"📝 Submitting results for group: {group_name}")
-#     print(f"🔢 {len(results_dict)} queries processed.")
-#     # You can replace this with the real submit() function provided on competition day
-#     with open(f"{group_name}_submission.json", "w") as f:
-#         json.dump(results_dict, f, indent=2)
-#     print(f"✅ Submission dictionary saved as {group_name}_submission.json")
 
 
 class ImageDataset(Dataset):
@@ -49,23 +40,7 @@ def load_model(cfg, device):
     checkpoint_path = cfg['model'].get('checkpoint_path', '')
     num_classes = cfg['model'].get('num_classes', 1000)
 
-    if name == 'moco_resnet50':
-        model = tv_models.resnet50(pretrained=False)
-        model.fc = nn.Identity()  # ⚠ rimuoviamo subito la testa (output 1000) → embedding 2048
-        checkpoint = torch.load(checkpoint_path, map_location=device)
-        if 'state_dict' in checkpoint:
-            state_dict = checkpoint['state_dict']
-            new_state_dict = {k.replace('module.encoder_q.', ''): v for k, v in state_dict.items() if k.startswith('module.encoder_q')}
-            model.load_state_dict(new_state_dict, strict=False)
-            print(f"✅ Loaded MoCo v2 ResNet50 from {checkpoint_path}")
-        else:
-            # directly a state_dict (from fine-tuned weights)
-            filtered_state_dict = {k: v for k, v in checkpoint.items() if not k.startswith('fc.')}
-            model.load_state_dict(filtered_state_dict, strict=False)
-            print(f"✅ Loaded fine-tuned weights from {checkpoint_path}")
-
-
-    elif source == 'open_clip':
+    if source == 'open_clip':
         model, _, _ = open_clip.create_model_and_transforms(name, pretrained=pretrained)
         model = model.visual  # only visual encoder
         if checkpoint_path:
@@ -74,16 +49,6 @@ def load_model(cfg, device):
             print(f"✅ Loaded custom weights from {checkpoint_path}")
         else:
             print(f"✅ Loaded {name} with pretrained weights from open_clip")
-
-    elif source == 'timm':
-        model = timm.create_model(name, pretrained=pretrained, num_classes=num_classes)
-        if checkpoint_path:
-            state_dict = torch.load(checkpoint_path, map_location=device)
-            filtered_state_dict = {k: v for k, v in state_dict.items() if not k.startswith('fc.') and not k.startswith('classifier.')}
-            model.load_state_dict(filtered_state_dict, strict=False)
-            print(f"✅ Loaded custom backbone weights from {checkpoint_path}")
-        model.reset_classifier(0, '')  # remove classifier head
-        print(f"✅ Loaded {name} from timm")
 
     else:
         model_fn = getattr(tv_models, name)

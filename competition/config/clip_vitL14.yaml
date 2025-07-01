@@ -1,0 +1,25 @@
+model:
+  name: "openai/clip-vit-large-patch14" 
+  source: "huggingface"
+  checkpoint_path: #saved_models/clip_vitl14_finetuned.pt
+
+data:
+  train_dir: data/train
+  query_dir: data/test/query 
+  gallery_dir: data/test/gallery 
+  img_size: 224 
+  batch_size: 16
+  normalization: 
+    mean: [0.48145466, 0.4578275, 0.40821073]
+    std: [0.26862954, 0.26130258, 0.27577711]
+
+training:
+  num_epochs: 20
+  freeze_backbone: false
+  lr_backbone: 1e-6 
+  lr_head: 1e-4 
+  save_checkpoint: saved_models/clip_vitl14_finetuned.pt
+
+retrieval:
+  top_k: 10 
+  output_json: results_clip_vitL14.json

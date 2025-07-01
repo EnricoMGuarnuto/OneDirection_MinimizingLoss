@@ -35,7 +35,7 @@ class CLIPFineTuner(nn.Module):
         features = self.base_model.get_image_features(pixel_values=pixel_values)
         return self.classifier(features)
 
-# --- Retrieval Model Wrapper ---
+
 class RetrievalModel(nn.Module):
     def __init__(self, fine_tuned_clip_fine_tuner):
         super().__init__()
@@ -50,30 +50,35 @@ class RetrievalModel(nn.Module):
             features = self.fine_tuned_clip_fine_tuner.base_model.get_image_features(pixel_values=pixel_values)
             return torch.nn.functional.normalize(features, p=2, dim=1)
 
-# --- Model Loading Function for Retrieval (now accepts num_classes as argument) ---
-def load_model(cfg, device, num_classes): # num_classes è passato direttamente
+
+def load_model(cfg, device, num_classes):
     model_name = cfg['model']['name']
     source = cfg['model'].get('source', 'huggingface')
-    checkpoint_path = cfg['training']['save_checkpoint']
     
-    if source == 'huggingface':
-        base_clip_model = CLIPModel.from_pretrained(model_name)
-        clip_embed_dim = base_clip_model.config.projection_dim
+    checkpoint_path = cfg['model'].get('checkpoint_path')
+    
+    if source != 'huggingface':
+        raise ValueError(f"Sorgente modello non supportata per il recupero: {source}. Scegliere 'huggingface'.")
 
-        full_fine_tuned_model = CLIPFineTuner(base_clip_model, clip_embed_dim, num_classes, unfreeze_layers=False)
-        
+    base_clip_model = CLIPModel.from_pretrained(model_name)
+    clip_embed_dim = base_clip_model.config.projection_dim
+
+    full_fine_tuned_model = CLIPFineTuner(base_clip_model, clip_embed_dim, num_classes, unfreeze_layers=False)
+    
+   
+    if checkpoint_path and os.path.exists(checkpoint_path):
         state_dict = torch.load(checkpoint_path, map_location=device)
         full_fine_tuned_model.load_state_dict(state_dict)
-        print(f"✅ Loaded fine-tuned CLIP model weights from {checkpoint_path}")
-
-        model = RetrievalModel(full_fine_tuned_model)
-
+        print(f"✅ Caricato modello CLIP fine-tunato da {checkpoint_path}")
     else:
-        raise ValueError(f"Unsupported model source for retrieval: {source}. Please choose 'huggingface'.")
+        print(f"⚠️ Percorso checkpoint '{checkpoint_path}' non trovato o vuoto. Caricamento del modello base CLIP '{model_name}'.")
+       
+
+    model = RetrievalModel(full_fine_tuned_model)
 
     return model.to(device)
 
-# --- Custom Dataset for Retrieval ---
+
 class ImageRetrievalDataset(Dataset):
     def __init__(self, image_paths, transform=None):
         self.image_paths = image_paths
@@ -89,19 +94,7 @@ class ImageRetrievalDataset(Dataset):
             image = self.transform(image)
         return image, img_path
 
-# --- Dummy Submit Function (REPLACE WITH REAL ONE FROM COMPETITION) ---
-def dummy_submit(data, group_name, url=None):
-    print(f"\n--- SUBMISSION SIMULATED ---")
-    print(f"Group Name: {group_name}")
-    print(f"Results Head (first 2 queries):\n{dict(list(data.items())[:2])}")
-    
-    output_filename = f"submission_{group_name}.json"
-    with open(output_filename, 'w') as f:
-        json.dump(data, f, indent=4)
-    print(f"Submission data saved to {output_filename}")
-    print(f"--- END SUBMISSION ---")
 
-# --- Main Retrieval Logic ---
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, required=True, help='Path to config YAML')
@@ -159,7 +152,6 @@ def main():
     else:
         print(f"✅ 'num_classes' loaded from config: {num_classes}")
 
-    # --- Load Fine-Tuned Model (now passes num_classes) ---
     model = load_model(cfg, device, num_classes)
     model.eval()
 
@@ -208,8 +200,6 @@ def main():
     with open(output_json_path, 'w') as f:
         json.dump(res, f, indent=4)
     print(f"Results saved to {output_json_path}")
-
-    dummy_submit(res, args.group)
 
     print("🏁 Retrieval process completed.")
 
