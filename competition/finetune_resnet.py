@@ -33,9 +33,9 @@ def load_model(cfg, device, num_classes):
         model.fc = nn.Linear(in_features, num_classes)
         if checkpoint_path:
             model.load_state_dict(torch.load(checkpoint_path, map_location=device), strict=False)
-            print(f"✅ Loaded weights from {checkpoint_path}")
+            print(f"Loaded weights from {checkpoint_path}")
         else:
-            print(f"✅ Loaded {name} with pretrained={pretrained}")
+            print(f"Loaded {name} with pretrained={pretrained}")
 
     return model.to(device)
 
@@ -80,7 +80,7 @@ def main():
         for name, param in model.named_parameters():
             if 'head' not in name and 'fc' not in name and 'classifier' not in name:
                 param.requires_grad = False
-        print("✅ Backbone frozen")
+        print("Backbone frozen")
 
     lr_head = float(cfg['training']['lr_head'])
     lr_backbone = float(cfg['training']['lr_backbone'])
@@ -101,19 +101,19 @@ def main():
     best_loss = float('inf')
 
     for epoch in range(cfg['training']['num_epochs']):
-        print(f"\n🌟 Epoch {epoch + 1}/{cfg['training']['num_epochs']}")
+        print(f"\n Epoch {epoch + 1}/{cfg['training']['num_epochs']}")
         epoch_loss = train_one_epoch(model, train_loader, optimizer, loss_fn, device)
         print(f"Epoch Loss: {epoch_loss:.4f}")
 
         if epoch_loss < best_loss:
             best_loss = epoch_loss
             torch.save(model.state_dict(), save_path)
-            print(f"✅ Saved best model to {save_path} (loss improved)")
+            print(f"Saved best model to {save_path} (loss improved)")
         else:
-            print("ℹ️ Loss did not improve. Skipping save.")
+            print("Loss did not improve. Skipping save.")
 
 
-        print("🏁 Final training completed. Model ready for retrieval!")
+        print("Final training completed. Model ready for retrieval!")
 
 
 if __name__ == '__main__':

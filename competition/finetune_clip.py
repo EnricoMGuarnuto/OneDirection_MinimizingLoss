@@ -20,11 +20,9 @@ class CLIPFineTuner(nn.Module):
         if unfreeze_layers:
             for param in self.base_model.vision_model.parameters():
                 param.requires_grad = True
-            print("✅ Base model (visual encoder) parameters UNFROZEN for fine-tuning.")
         else:
             for param in self.base_model.vision_model.parameters():
                 param.requires_grad = False
-            print("❄️ Base model (visual encoder) parameters FROZEN.")
 
     def forward(self, pixel_values):
         features = self.base_model.get_image_features(pixel_values=pixel_values)
@@ -79,9 +77,9 @@ def train_model(model, dataloader, epochs, lr_base, lr_classifier, clip_processo
         if epoch_acc > best_accuracy:
             best_accuracy = epoch_acc
             torch.save(model.state_dict(), save_path)
-            print(f"✅ Saved best model to {save_path} (Accuracy improved to {best_accuracy:.2f}%)")
+            print(f"Saved best model to {save_path} (Accuracy improved to {best_accuracy:.2f}%)")
         else:
-            print(f"ℹ️ Accuracy did not improve from {best_accuracy:.2f}%. Skipping save.")
+            print(f"ℹAccuracy did not improve from {best_accuracy:.2f}%. Skipping save.")
 
     return model
 
@@ -95,7 +93,7 @@ def main():
 
     transform = transforms.Compose([
         transforms.Resize((cfg['data']['img_size'], cfg['data']['img_size'])),
-        transforms.ToTensor(), # Converte in Tensor [0,1]
+        transforms.ToTensor(), 
     ])
 
     full_dataset = datasets.ImageFolder(root=cfg['data']['train_dir'], transform=transform)
@@ -113,7 +111,7 @@ def main():
         base_clip_model = CLIPModel.from_pretrained(hf_model_name).to(device)
 
         clip_embed_dim = base_clip_model.config.projection_dim
-        print(f"✅ Loaded Hugging Face CLIP model: {hf_model_name} with embedding dimension {clip_embed_dim}")
+        print(f"Loaded Hugging Face CLIP model: {hf_model_name} with embedding dimension {clip_embed_dim}")
 
     else:
         raise ValueError(f"Unsupported model source for classification fine-tuning: {cfg['model']['source']}. Use 'open_clip' or 'huggingface'.")
@@ -122,7 +120,6 @@ def main():
     model = CLIPFineTuner(base_clip_model, clip_embed_dim, num_classes, unfreeze_layers=unfreeze)
     model = model.to(device)
 
-    # --- Training ---
     print("\nStarting training...")
     train_model(
         model=model,
@@ -134,7 +131,7 @@ def main():
         save_path=cfg['training']['save_checkpoint']
     )
 
-    print("🏁 Final training completed for classification. Model saved.")
+    print("Final training completed for classification. Model saved.")
     print(f"Model saved to: {cfg['training']['save_checkpoint']}")
     print("\nNext steps: For image retrieval, you will need to load this fine-tuned model, extract features (embeddings) before the final classifier, and then perform similarity search on your test set.")
 

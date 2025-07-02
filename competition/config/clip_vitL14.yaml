@@ -8,7 +8,7 @@ data:
   query_dir: data/test/query 
   gallery_dir: data/test/gallery 
   img_size: 224 
-  batch_size: 16
+  batch_size: 8
   normalization: 
     mean: [0.48145466, 0.4578275, 0.40821073]
     std: [0.26862954, 0.26130258, 0.27577711]

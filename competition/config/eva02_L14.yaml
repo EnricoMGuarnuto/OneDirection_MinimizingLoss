@@ -2,7 +2,7 @@ model:
   name: EVA02-L-14
   source: open_clip
   pretrained: merged2b_s4b_b131k
-  checkpoint_path: saved_models/eva02_l14_finetuned.pt
+  checkpoint_path: saved_models/eva_clip_finetuned.pt
 
 data:
   train_dir:    data/train
@@ -17,7 +17,7 @@ data:
 training:
   num_epochs: 10
   freeze_backbone: false 
-  lr_backbone: 1e-5
+  lr_backbone: 1e-2
   lr_head: 1e-3
   margin: 0.2
   save_checkpoint: saved_models/eva_clip_finetuned.pt
