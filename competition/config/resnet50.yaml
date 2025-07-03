@@ -11,9 +11,6 @@ data:
   query_dir: data/test/query
   img_size: 224
   batch_size: 32
-  normalization:
-    mean: [0.485, 0.456, 0.406]
-    std: [0.229, 0.224, 0.225]
   val_split: 0.1
 
 training:
@@ -22,8 +19,8 @@ training:
   lr_backbone: 1e-5
   lr_head: 1e-3
   margin: 0.2
-  save_checkpoint:  #saved_models/resnet50_finetuned_ce_opt.pt
+  save_checkpoint: saved_models/resnet50_finetuned_ce_opt.pt
 
 retrieval:
   top_k: 10
-  output_json: results_resnet50.json  
+  output_json: results/results_resnet50.json  

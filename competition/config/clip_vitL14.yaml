@@ -9,9 +9,6 @@ data:
   gallery_dir: data/test/gallery 
   img_size: 224 
   batch_size: 8
-  normalization: 
-    mean: [0.48145466, 0.4578275, 0.40821073]
-    std: [0.26862954, 0.26130258, 0.27577711]
 
 training:
   num_epochs: 20
@@ -22,4 +19,4 @@ training:
 
 retrieval:
   top_k: 10 
-  output_json: results_clip_vitL14.json
+  output_json: results/results_clip_vitL14.json
