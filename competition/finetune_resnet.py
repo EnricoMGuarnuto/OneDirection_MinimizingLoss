@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 
+# Simple linear head model: backbone + classifier head
 class LinearHead(nn.Module):
     def __init__(self, backbone, in_features, num_classes):
         super().__init__()
@@ -20,6 +21,7 @@ class LinearHead(nn.Module):
         return self.head(x)
 
 
+# Load model with pretrained weights and optional checkpoint
 def load_model(cfg, device, num_classes):
     name = cfg['model']['name']
     source = cfg['model'].get('source', 'torchvision')
@@ -40,6 +42,7 @@ def load_model(cfg, device, num_classes):
     return model.to(device)
 
 
+# Train the model for one epoch
 def train_one_epoch(model, loader, optimizer, loss_fn, device):
     model.train()
     running_loss = 0.0
@@ -54,6 +57,7 @@ def train_one_epoch(model, loader, optimizer, loss_fn, device):
     return running_loss / len(loader.dataset)
 
 
+# Main training script
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, required=True, help='Path to config YAML')
@@ -67,21 +71,25 @@ def main():
     transform = transforms.Compose([
         transforms.Resize((cfg['data']['img_size'], cfg['data']['img_size'])),
         transforms.ToTensor(),
-        transforms.Normalize(mean=cfg['data']['normalization']['mean'], std=cfg['data']['normalization']['std'])
+        transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                             std=[0.229, 0.224, 0.225])
     ])
 
+    # Load training dataset
     full_dataset = datasets.ImageFolder(cfg['data']['train_dir'], transform=transform)
     num_classes = len(full_dataset.classes)
     train_loader = DataLoader(full_dataset, batch_size=cfg['data']['batch_size'], shuffle=True, num_workers=4)
 
     model = load_model(cfg, device, num_classes)
 
+    # Optionally freeze the backbone layers
     if cfg['training'].get('freeze_backbone', False):
         for name, param in model.named_parameters():
             if 'head' not in name and 'fc' not in name and 'classifier' not in name:
                 param.requires_grad = False
         print("Backbone frozen")
 
+    # Separate learning rates for head and backbone
     lr_head = float(cfg['training']['lr_head'])
     lr_backbone = float(cfg['training']['lr_backbone'])
 
@@ -94,17 +102,20 @@ def main():
     ])
     loss_fn = nn.CrossEntropyLoss()
 
+    # Directory to save model checkpoints
     os.makedirs(os.path.dirname(cfg['training']['save_checkpoint']), exist_ok=True)
-
     save_path = cfg['training']['save_checkpoint']
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
     best_loss = float('inf')
 
+    # Training loop
     for epoch in range(cfg['training']['num_epochs']):
-        print(f"\n Epoch {epoch + 1}/{cfg['training']['num_epochs']}")
+        print(f"Epoch {epoch + 1}/{cfg['training']['num_epochs']}")
         epoch_loss = train_one_epoch(model, train_loader, optimizer, loss_fn, device)
         print(f"Epoch Loss: {epoch_loss:.4f}")
 
+        # Save the best model based on loss
         if epoch_loss < best_loss:
             best_loss = epoch_loss
             torch.save(model.state_dict(), save_path)
@@ -112,8 +123,7 @@ def main():
         else:
             print("Loss did not improve. Skipping save.")
 
-
-        print("Final training completed. Model ready for retrieval!")
+    print("Training completed. Model ready for retrieval")
 
 
 if __name__ == '__main__':

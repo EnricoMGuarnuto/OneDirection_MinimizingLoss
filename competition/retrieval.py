@@ -15,6 +15,8 @@ from torchvision import transforms, models as tv_models
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+
+# Custom dataset to load images and apply transforms
 class ImageDataset(Dataset):
     def __init__(self, image_paths, transform):
         self.image_paths = image_paths
@@ -28,6 +30,8 @@ class ImageDataset(Dataset):
         img = Image.open(img_path).convert('RGB')
         return self.transform(img), os.path.basename(img_path)
 
+
+# Load model and setup preprocessing & feature extraction
 def load_model(cfg, device):
     source = cfg['model']['source']
     name = cfg['model']['name']
@@ -58,22 +62,30 @@ def load_model(cfg, device):
     elif source == 'torchvision':
         model_fn = getattr(tv_models, name)
         base_model = model_fn(pretrained=pretrained).to(device)
+
         if checkpoint_path and os.path.exists(checkpoint_path):
             state_dict = torch.load(checkpoint_path, map_location=device)
-            base_model.load_state_dict(state_dict, strict=False)
-            print(f"Loaded checkpoint from {checkpoint_path}")
 
-        # Remove classification head
+            # Remove classifier weights to avoid dimension mismatch
+            for key in ['fc.weight', 'fc.bias']:
+                if key in state_dict:
+                    del state_dict[key]
+
+            base_model.load_state_dict(state_dict, strict=False)
+            print(f"✅ Loaded checkpoint from {checkpoint_path} (fc layer skipped)")
+        
+        # Remove the classification head to get feature embeddings
         if hasattr(base_model, 'fc'):
             base_model.fc = torch.nn.Identity()
         elif hasattr(base_model, 'classifier'):
             base_model.classifier = torch.nn.Identity()
+
         processor = None
         transform = transforms.Compose([
             transforms.Resize((cfg['data']['img_size'], cfg['data']['img_size'])),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])
+                                std=[0.229, 0.224, 0.225])
         ])
         feature_fn = lambda images: base_model(images)
 
@@ -82,6 +94,8 @@ def load_model(cfg, device):
 
     return base_model.eval(), processor, transform, feature_fn
 
+
+# Get image file paths from a folder
 def get_image_paths(folder):
     exts = ['jpg', 'jpeg', 'png']
     return sorted([
@@ -90,6 +104,8 @@ def get_image_paths(folder):
         if f.lower().endswith(tuple(exts))
     ])
 
+
+# Extract embeddings from images using the given model
 def extract_embeddings(model, dataloader, processor, feature_fn, source):
     all_embeddings = []
     all_filenames = []
@@ -110,6 +126,8 @@ def extract_embeddings(model, dataloader, processor, feature_fn, source):
     all_embeddings = torch.cat(all_embeddings, dim=0).numpy()
     return all_embeddings, all_filenames
 
+
+# Compute top-k similar images using cosine similarity
 def compute_topk(query_embeds, gallery_embeds, query_files, gallery_files, k):
     sims = cosine_similarity(query_embeds, gallery_embeds)
     results = {}
@@ -120,6 +138,8 @@ def compute_topk(query_embeds, gallery_embeds, query_files, gallery_files, k):
         results[qfile] = topk_files
     return results
 
+
+# Main pipeline
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, required=True, help='Path to config YAML')
@@ -155,6 +175,7 @@ def main():
     with open(output_path, 'w') as f:
         json.dump(results, f, indent=2)
     print(f"Saved retrieval results to {output_path}")
+
 
 if __name__ == '__main__':
     main()

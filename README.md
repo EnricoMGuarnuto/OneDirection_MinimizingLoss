@@ -28,7 +28,6 @@ competition/
 ├── results/                 # JSON retrieval results for each model
 │   ├── results_clip_vitL14_finetuned.json
 │   ├── results_clip_vitL14.json
-│   ├── results_eva01_g14_finetuned.json
 │   ├── results_eva01_g14.json
 │   ├── results_resnet50_finetuned.json
 │   └── results_resnet50.json
@@ -125,12 +124,16 @@ python submit.py
 
 ## Requirements
 
-* PyTorch
-* timm
-* open\_clip
-* numpy
-* pyyaml
+* torch
+* torchvision
 * tqdm
+* PyYAML
+* scikit-learn
+* numpy
+* Pillow
+* open_clip_torch
+* optuna
+
 
 Install everything with:
 

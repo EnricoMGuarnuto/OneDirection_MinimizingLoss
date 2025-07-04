@@ -11,28 +11,30 @@ from transformers import AutoProcessor, CLIPModel
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+
+# Wrapper for fine-tuning CLIP model on image classification
 class CLIPFineTuner(nn.Module):
     def __init__(self, base_model, embed_dim, num_classes, unfreeze_layers=True):
         super().__init__()
         self.base_model = base_model
         self.classifier = nn.Linear(embed_dim, num_classes)
 
-        if unfreeze_layers:
-            for param in self.base_model.vision_model.parameters():
-                param.requires_grad = True
-        else:
-            for param in self.base_model.vision_model.parameters():
-                param.requires_grad = False
+        # Optionally unfreeze vision encoder layers for fine-tuning
+        for param in self.base_model.vision_model.parameters():
+            param.requires_grad = unfreeze_layers
 
     def forward(self, pixel_values):
         features = self.base_model.get_image_features(pixel_values=pixel_values)
         return self.classifier(features)
 
+
+# Training loop for classification fine-tuning
 def train_model(model, dataloader, epochs, lr_base, lr_classifier, clip_processor, save_path):
     model = model.to(device)
     model.train()
     criterion = nn.CrossEntropyLoss()
 
+    # Separate learning rates for encoder and classifier
     base_params = [p for n, p in model.named_parameters() if "base_model" in n and p.requires_grad]
     classifier_params = [p for n, p in model.named_parameters() if "classifier" in n and p.requires_grad]
 
@@ -40,7 +42,6 @@ def train_model(model, dataloader, epochs, lr_base, lr_classifier, clip_processo
         {'params': base_params, 'lr': lr_base},
         {'params': classifier_params, 'lr': lr_classifier}
     ])
-
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, epochs * len(dataloader))
 
     best_accuracy = -1.0
@@ -53,11 +54,11 @@ def train_model(model, dataloader, epochs, lr_base, lr_classifier, clip_processo
         for images, labels in tqdm(dataloader, desc=f"Epoch {epoch+1}/{epochs} Training"):
             images, labels = images.to(device), labels.to(device)
 
+            # Preprocess images for CLIP
             inputs = clip_processor(images=images, return_tensors="pt", do_rescale=False).to(device)
 
             optimizer.zero_grad()
             outputs = model(inputs.pixel_values) 
-
             loss = criterion(outputs, labels)
 
             loss.backward()
@@ -65,7 +66,6 @@ def train_model(model, dataloader, epochs, lr_base, lr_classifier, clip_processo
             scheduler.step()
 
             running_loss += loss.item()
-
             _, predicted = outputs.max(1)
             total += labels.size(0)
             correct += predicted.eq(labels).sum().item()
@@ -74,15 +74,18 @@ def train_model(model, dataloader, epochs, lr_base, lr_classifier, clip_processo
         epoch_acc = 100.0 * correct / total
         print(f"Epoch {epoch+1} - Loss: {epoch_loss:.4f}, Accuracy: {epoch_acc:.2f}%")
 
+        # Save best model based on accuracy
         if epoch_acc > best_accuracy:
             best_accuracy = epoch_acc
             torch.save(model.state_dict(), save_path)
             print(f"Saved best model to {save_path} (Accuracy improved to {best_accuracy:.2f}%)")
         else:
-            print(f"ℹAccuracy did not improve from {best_accuracy:.2f}%. Skipping save.")
+            print(f"Accuracy did not improve from {best_accuracy:.2f}%. Skipping save.")
 
     return model
 
+
+# Load config, prepare dataset, and run training
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, required=True, help='Path to config YAML')
@@ -104,22 +107,18 @@ def main():
 
     if cfg['model']['source'] == 'open_clip' or cfg['model']['source'] == 'huggingface':
         hf_model_name = cfg['model']['name']
-        
-
         clip_processor = AutoProcessor.from_pretrained(hf_model_name)
-
         base_clip_model = CLIPModel.from_pretrained(hf_model_name).to(device)
-
         clip_embed_dim = base_clip_model.config.projection_dim
         print(f"Loaded Hugging Face CLIP model: {hf_model_name} with embedding dimension {clip_embed_dim}")
-
     else:
-        raise ValueError(f"Unsupported model source for classification fine-tuning: {cfg['model']['source']}. Use 'open_clip' or 'huggingface'.")
+        raise ValueError(f"Unsupported model source for classification fine-tuning: {cfg['model']['source']}.")
 
+    # Prepare fine-tuning model
     unfreeze = not cfg['training'].get('freeze_backbone', False)
-    model = CLIPFineTuner(base_clip_model, clip_embed_dim, num_classes, unfreeze_layers=unfreeze)
-    model = model.to(device)
+    model = CLIPFineTuner(base_clip_model, clip_embed_dim, num_classes, unfreeze_layers=unfreeze).to(device)
 
+    # Start training
     print("\nStarting training...")
     train_model(
         model=model,
@@ -133,7 +132,7 @@ def main():
 
     print("Final training completed for classification. Model saved.")
     print(f"Model saved to: {cfg['training']['save_checkpoint']}")
-    print("\nNext steps: For image retrieval, you will need to load this fine-tuned model, extract features (embeddings) before the final classifier, and then perform similarity search on your test set.")
+    print("\nNext steps: To use this model for image retrieval, load it and extract features before the classifier.")
 
 
 if __name__ == '__main__':
