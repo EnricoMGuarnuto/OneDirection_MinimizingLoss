@@ -77,7 +77,7 @@ def train_model(model, dataloader, epochs, lr_base, lr_classifier, clip_processo
         # Save best model based on accuracy
         if epoch_acc > best_accuracy:
             best_accuracy = epoch_acc
-            torch.save(model.state_dict(), save_path)
+            torch.save(model.base_model.state_dict(), save_path) #this line has been modified--> it was: torch.save(model.state_dict(), save_path)
             print(f"Saved best model to {save_path} (Accuracy improved to {best_accuracy:.2f}%)")
         else:
             print(f"Accuracy did not improve from {best_accuracy:.2f}%. Skipping save.")
