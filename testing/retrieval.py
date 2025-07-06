@@ -143,7 +143,7 @@ from collections import defaultdict
 
 def evaluate_topk(results, query_paths, gallery_paths, k):
     """Valuta la top-k accuracy utilizzando i nomi delle cartelle come label."""
-    # Estrai label dalle path: si assume che il nome della cartella sia la classe
+    # Extract labels from paths: assumes the folder name represents the class
     query_labels = {os.path.basename(p): os.path.basename(os.path.dirname(p)) for p in query_paths}
     gallery_labels = {os.path.basename(p): os.path.basename(os.path.dirname(p)) for p in gallery_paths}
 
@@ -169,7 +169,7 @@ def evaluate_retrieval_ratio(results, query_paths, gallery_paths):
     query_labels = {os.path.basename(p): os.path.basename(os.path.dirname(p)) for p in query_paths}
     gallery_labels = {os.path.basename(p): os.path.basename(os.path.dirname(p)) for p in gallery_paths}
 
-    # Costruisci mappa: classe → set di immagini nella gallery
+    # Build a map: class → set of images in the gallery
     class_to_gallery = {}
     for fname, label in gallery_labels.items():
         class_to_gallery.setdefault(label, set()).add(fname)
@@ -179,7 +179,7 @@ def evaluate_retrieval_ratio(results, query_paths, gallery_paths):
         q_label = query_labels[qfile]
         gallery_images_of_class = class_to_gallery.get(q_label, set())
 
-        # Intersezione tra le immagini topk e quelle della stessa classe
+    # Intersection between top-k images and those from the same class
         correct_hits = len(set(topk_files) & gallery_images_of_class)
         total_possible = len(gallery_images_of_class)
 
@@ -190,79 +190,6 @@ def evaluate_retrieval_ratio(results, query_paths, gallery_paths):
     average_ratio = total_ratio / len(results)
     print(f"\n📈 Retrieval accuracy (class match rate over top-k): {average_ratio:.4f}")
     return average_ratio
-
-def print_retrieval_matches(results, query_paths, gallery_paths, top_k=5, num_examples=5):
-    """
-    Stampa le immagini query e i relativi top-k risultati con indicazione della classe.
-    """
-    query_labels = {os.path.basename(p): os.path.basename(os.path.dirname(p)) for p in query_paths}
-    gallery_labels = {os.path.basename(p): os.path.basename(os.path.dirname(p)) for p in gallery_paths}
-
-    shown = 0
-    for qfile, topk_files in results.items():
-        if qfile not in query_labels:
-            continue
-
-        q_label = query_labels[qfile]
-        print(f"\n🟦 Query: {qfile} ({q_label})")
-        print("Top-k risultati:")
-
-        for i, gfile in enumerate(topk_files[:top_k]):
-            g_label = gallery_labels.get(gfile, "UNKNOWN")
-            status = "✅" if g_label == q_label else "❌"
-            print(f"  {status} {i+1}. {gfile} ({g_label})")
-
-        shown += 1
-        if shown >= num_examples:
-            break
-
-import matplotlib.pyplot as plt
-from PIL import Image
-
-def show_retrieval_images(results, query_paths, gallery_paths, top_k=5, num_examples=3):
-    """
-    Visualizza alcune immagini query con i loro top-k risultati suggeriti.
-    """
-    query_labels = {os.path.basename(p): os.path.basename(os.path.dirname(p)) for p in query_paths}
-    gallery_labels = {os.path.basename(p): os.path.basename(os.path.dirname(p)) for p in gallery_paths}
-    gallery_dict = {os.path.basename(p): p for p in gallery_paths}
-    query_dict = {os.path.basename(p): p for p in query_paths}
-
-    shown = 0
-    for qfile, topk_files in results.items():
-        if qfile not in query_dict:
-            continue
-
-        q_label = query_labels[qfile]
-        q_path = query_dict[qfile]
-
-        fig, axs = plt.subplots(1, top_k + 1, figsize=(15, 3))
-        fig.suptitle(f"Query: {qfile} ({q_label})", fontsize=12)
-
-        # Query image
-        q_img = Image.open(q_path).convert('RGB')
-        axs[0].imshow(q_img)
-        axs[0].set_title("Query")
-        axs[0].axis('off')
-
-        # Top-k images
-        for i, gfile in enumerate(topk_files[:top_k]):
-            g_label = gallery_labels.get(gfile, "UNKNOWN")
-            g_path = gallery_dict.get(gfile, None)
-            if g_path is None:
-                continue
-            g_img = Image.open(g_path).convert('RGB')
-            axs[i + 1].imshow(g_img)
-            axs[i + 1].set_title(f"{g_label}", color='green' if g_label == q_label else 'red')
-            axs[i + 1].axis('off')
-
-        plt.tight_layout()
-        plt.show()
-
-        shown += 1
-        if shown >= num_examples:
-            break
-
 
 # Main pipeline
 def main():
@@ -302,10 +229,6 @@ def main():
     print(f"Saved retrieval results to {output_path}")
     evaluate_topk(results, query_paths, gallery_paths, top_k)
     evaluate_retrieval_ratio(results, query_paths, gallery_paths)
-    print_retrieval_matches(results, query_paths, gallery_paths, top_k=5, num_examples=5)
-    show_retrieval_images(results, query_paths, gallery_paths, top_k=5, num_examples=3)
-
-
 
 if __name__ == '__main__':
     main()

@@ -1,0 +1,22 @@
+model:
+  name: "openai/clip-vit-large-patch14" 
+  source: "huggingface"
+  checkpoint_path: saved_models/clip_vitl14_finetuned_animal.pt
+
+data:
+  train_dir: Animal_Image_Dataset_slpit/train
+  query_dir: Animal_Image_Dataset_slpit/test/query
+  gallery_dir: Animal_Image_Dataset_slpit/test/gallery
+  img_size: 224 
+  batch_size: 8
+
+training:
+  num_epochs: 20
+  freeze_backbone: false
+  lr_backbone: 1e-6 
+  lr_head: 1e-4 
+  save_checkpoint: saved_models/clip_vitl14_finetuned_animal_animals.pt
+
+retrieval:
+  top_k: 10 
+  output_json: results/results_clip_vitL14_animal_finetuned_animals.json

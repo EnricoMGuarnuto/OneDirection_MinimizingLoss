@@ -6,9 +6,9 @@ model:
   output_dim: 2048
 
 data:
-  train_dir: dataset/train
-  query_dir: dataset/test/query
-  gallery_dir: dataset/test/gallery
+  train_dir: Animal_Image_Dataset_slpit/train
+  query_dir: Animal_Image_Dataset_slpit/test/query
+  gallery_dir: Animal_Image_Dataset_slpit/test/gallery
   img_size: 224
   batch_size: 32
   val_split: 0.1
@@ -18,8 +18,8 @@ training:
   freeze_backbone: false
   lr_backbone: 1e-5
   lr_head: 1e-3
-  save_checkpoint: saved_models/resnet50_finetuned.pt
+  save_checkpoint: saved_models/resnet50_finetuned_animals.pt
 
 retrieval:
   top_k: 10
-  output_json: results/results_resnet50_finetuned.json  
+  output_json: results/results_resnet50_finetuned_animals.json  

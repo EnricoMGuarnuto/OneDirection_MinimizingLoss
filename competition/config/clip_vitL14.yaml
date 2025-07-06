@@ -4,9 +4,9 @@ model:
   checkpoint_path: saved_models/clip_vitl14_finetuned_animal.pt
 
 data:
-  train_dir: data_testing/dataset/train
-  query_dir: data_testing/dataset/test/query
-  gallery_dir: data_testing/dataset/test/gallery
+  train_dir: dataset/train
+  query_dir: dataset/test/query
+  gallery_dir: dataset/test/gallery
   img_size: 224 
   batch_size: 8
 

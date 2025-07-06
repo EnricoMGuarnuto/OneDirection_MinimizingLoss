@@ -1,10 +1,19 @@
 # Ignore datasets and heavy files
 __pycache__/
 
-competition/dataset/
+competition/dataset/train
+
+competition/dataset/test
 
 competition/saved_models/
 
-testing/Animal_Image_Dataset_original/
+testing/Animal_Image_Dataset_original/train
 
-testing/Animal_Image_Dataset_split/
+testing/Animal_Image_Dataset_original/test
+
+testing/Animal_Image_Dataset_split/train
+
+testing/Animal_Image_Dataset_split/test
+
+
+testing/saved_models/

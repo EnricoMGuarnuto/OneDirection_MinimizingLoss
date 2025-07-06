@@ -3,24 +3,24 @@ import shutil
 import random
 from pathlib import Path
 
-# Path originali
-base_path = Path("Animal_Image_Dataset_original/animals/animals")  # il path dove ci sono le folder degli animali
+# Original path
+base_path = Path("Animal_Image_Dataset_original/animals/animals")   # the path where the animal folders are located
 output_base = Path("dataset")
 
-# Percentuali di split
+# Split percentages
 train_split = 0.7
-query_split = 0.15  # del totale
-gallery_split = 0.15  # del totale
+query_split = 0.15  
+gallery_split = 0.15
 
-random.seed(42)  # per riproducibilità
+random.seed(42)  # for reproducibility
 
-# Crea directory
+# Create directories
 for split in ["train", "test/query", "test/gallery"]:
     for animal_dir in base_path.iterdir():
         if animal_dir.is_dir():
             os.makedirs(output_base / split / animal_dir.name, exist_ok=True)
 
-# Processa ciascuna classe
+# Process each class
 for animal_dir in base_path.iterdir():
     if not animal_dir.is_dir():
         continue
