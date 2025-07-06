@@ -64,7 +64,7 @@ All fine-tuning and retrieval scripts rely on `.yaml` configuration files specif
 * **CLIP ViT-L/14** (HuggingFace)
 * **EVA-01-G/14** (OpenCLIP)
 
-All models are fine-tuned separately using their respective YAML configuration.
+Resnet50 and CLIP Vit-L/14 models are fine-tuned separately using their respective YAML configuration.
 
 ---
 
